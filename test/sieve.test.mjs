@@ -3,6 +3,7 @@ import { test } from 'node:test';
 import {
   collectGroups,
   collectMessages,
+  hiddenState,
   lookupMessage,
   pruneRanges,
   publicState,
@@ -496,4 +497,42 @@ test('refuses to prune the protected system head in message mode', () => {
   const result = pruneRanges(session, [{ startSeq: 1, endSeq: 1 }], tokenMeter, 'message');
   assert.equal(result.ok, false);
   assert.equal(result.code, 'protected');
+});
+
+test('exposes chat node keys for the located units', () => {
+  const { session, tokenMeter } = makeSession();
+  session.id = 'session-lookup-keys';
+  const found = lookupMessage(session, 'a2', tokenMeter);
+
+  assert.deepEqual(found.message.nodeKeys, ['14:assistant-step1:0']);
+  assert.deepEqual(found.group.nodeKeys, ['14:assistant-step1:0']);
+  assert.deepEqual(found.group.fullTurns, [1]);
+  assert.deepEqual(found.hidden, { sessionId: 'session-lookup-keys', keys: [], turns: [], ranges: [] });
+});
+
+test('derives the hidden chat nodes from the durable prune marker', () => {
+  const { session, tokenMeter } = makeSession();
+  session.id = 'session-hidden';
+  const pruned = pruneRanges(session, [{ startSeq: 6, endSeq: 7 }], tokenMeter, 'group');
+
+  assert.equal(pruned.ok, true);
+  assert.match(session.appends[0].data.message.id, /^turn-sieve-[a-z0-9]+-0-r6-7-t1$/);
+  assert.deepEqual(pruned.hidden.keys, ['14:assistant-step1:0']);
+  assert.deepEqual(pruned.hidden.turns, [1]);
+  assert.deepEqual(pruned.hidden.ranges, [{ startSeq: 6, endSeq: 7 }]);
+
+  // A restarted host has no in-memory cache: the marker alone must rebuild it.
+  const rebuilt = hiddenState({ id: 'session-hidden', snapshotEvents: () => session.snapshotEvents() });
+  assert.deepEqual(rebuilt.keys, ['14:assistant-step1:0']);
+  assert.deepEqual(rebuilt.turns, [1]);
+  assert.deepEqual(rebuilt.ranges, [{ startSeq: 6, endSeq: 7 }]);
+
+  const undo = undoLast(session, tokenMeter, 'group');
+  assert.equal(undo.ok, true);
+  assert.deepEqual(undo.hidden.keys, []);
+  assert.deepEqual(undo.hidden.turns, []);
+  assert.deepEqual(undo.hidden.ranges, []);
+  assert.match(session.appends.at(-1).data.message.id, /^turn-sieve-restored-[a-z0-9]+-r6-7$/);
+  const afterUndo = hiddenState({ id: 'session-hidden', snapshotEvents: () => session.snapshotEvents() });
+  assert.deepEqual(afterUndo.keys, []);
 });

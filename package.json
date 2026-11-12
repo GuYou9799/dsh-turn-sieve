@@ -1,7 +1,7 @@
 {
   "name": "dsh-turn-sieve",
-  "version": "0.5.0",
-  "description": "Selectively remove low-value exchanges or individual messages from a DeepSeek Harness conversation, with an inline chat selection, liquid-glass panel and undo, without starting a new session. 回合筛：按整段问答或单条消息清理当前会话，支持在原回复旁直接选中、高亮并删除，提供液态玻璃外观与动效开关。",
+  "version": "0.5.1",
+  "description": "Selectively remove low-value exchanges or individual messages from a DeepSeek Harness conversation: pick them right beside the assistant reply, confirm inline with ✓, watch the pruned part disappear from the transcript, and undo it any time. Liquid-glass panel with glass/motion toggles. 回合筛：在回复旁直接选中并 ✓ 确认删除，被筛除的内容立即从对话中消失，可随时撤销；主面板提供液态玻璃外观与动效开关。",
   "type": "module",
   "main": "lib/index.js",
   "exports": {

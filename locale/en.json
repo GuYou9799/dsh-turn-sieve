@@ -1,6 +1,6 @@
 {
   "meta": {
     "title": "Turn Sieve (dsh-turn-sieve)",
-    "description": "Selectively drop whole Q&A exchanges or individual messages from the current conversation, or use the “Sieve” action beside any assistant reply to select, highlight and remove that exact part in place, and undo the last deletion. The main panel offers a liquid-glass look with motion toggles. The system context is protected and the append-only log is kept."
+    "description": "Selectively drop whole Q&A exchanges or individual messages from the current conversation. Click “Sieve” beside any assistant reply to select it in place: that part gets a deeper background with rounded shadow corners, then confirm with ✓, cancel with ✕, and switch between “Exchange / Only this reply”. Once removed, the part disappears from the transcript immediately (the append-only log stays intact) and can be restored with one undo from the main panel. The main panel uses a liquid-glass look with “Liquid glass / Motion” toggles in its header. The system context, the initial session context and the latest exchange are protected."
   }
 }

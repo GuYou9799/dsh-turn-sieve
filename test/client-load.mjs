@@ -47,4 +47,14 @@ if (!names.includes('conversation.chat.assistant-actions:dsh-turn-sieve:quick'))
 for (const entry of registrations) {
   if (typeof entry.component !== 'function') throw new Error(`slot ${entry.definition.id} has no component`);
 }
+for (const name of ['dts-hidden-node', 'dts-selected-node', 'dts-sel-first', 'dts-sel-last', 'dts-force-reveal', 'dts-confirm', 'dts-cancel', 'dts-scope-pill', 'dts-sheen', 'dts-overlay-glass']) {
+  if (!source.includes(name)) throw new Error(`missing style rule for .${name}`);
+}
+for (const name of ['quickConfirmGroupTitle', 'quickConfirmMessageTitle', 'scopeGroup', 'scopeMessage', 'quickCancelSelection']) {
+  if (!source.includes(name)) throw new Error(`missing string key ${name}`);
+}
+for (const name of ['dts-bubble', 'quickSwitchToMessage', 'quickRemoveGroup']) {
+  if (source.includes(name)) throw new Error(`stale v0.5.0 modal artifact ${name} is still present`);
+}
+if (!source.includes('/api/dsh-turn-sieve/hidden')) throw new Error('missing hidden-nodes route');
 console.log('client module loaded; registrations:', names.join(', '));
