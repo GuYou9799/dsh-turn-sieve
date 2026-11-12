@@ -235,6 +235,59 @@ test('splits the surface into message units and protects only the system head', 
   assert.equal(state.messages[1].title, 'first question');
 });
 
+test('recognizes runtime-context source without a known text prefix', () => {
+  const events = [
+    {
+      seq: 1,
+      type: 'system/message',
+      data: {
+        turn: 0,
+        step: 0,
+        message: { id: 'sys', role: 'system', source: { kind: 'system-prompt' }, content: [{ type: 'text', text: 'system prompt' }] },
+      },
+    },
+    {
+      seq: 2,
+      type: 'user/message',
+      data: {
+        role: 'user',
+        source: { kind: 'runtime-context', form: 'snapshot', sections: [] },
+        content: [{ type: 'text', text: 'hello from injected context' }],
+      },
+    },
+    { seq: 3, type: 'user/message', data: { role: 'user', content: [{ type: 'text', text: 'real question' }] } },
+    {
+      seq: 4,
+      type: 'assistant/message',
+      data: {
+        turn: 0,
+        step: 0,
+        message: { id: 'a1', role: 'assistant', source: { kind: 'model', provider: 'test', model: 'test' }, content: [{ type: 'text', text: 'answer' }] },
+      },
+    },
+  ];
+  const nodes = [1, 2, 3, 4];
+  const session = {
+    id: 'session-2',
+    seq: 5,
+    surface: { get nodes() { return [...nodes]; } },
+    snapshotEvents(fromSeq = 0, toSeqExclusive = Number.POSITIVE_INFINITY) {
+      return events.filter((event) => event.seq >= fromSeq && event.seq < toSeqExclusive);
+    },
+    eventAt(seq) {
+      return events.find((event) => event.seq === seq);
+    },
+  };
+
+  const groups = collectGroups(session);
+  assert.deepEqual(groups.groups.map((group) => [group.startSeq, group.endSeq]), [[1, 2], [3, 4]]);
+  assert.equal(groups.groups[1].title, 'real question');
+
+  const messages = collectMessages(session);
+  assert.equal(messages.messages[1].internal, true);
+  assert.equal(messages.messages[2].internal, false);
+});
+
 test('keeps an assistant tool call atomic with its tool results', () => {
   const events = [
     { seq: 0, type: 'turn/start', data: { turn: 0 } },

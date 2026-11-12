@@ -90,7 +90,7 @@ dsh plugin add dsh-turn-sieve
 DSH 的 `Session` 有一个「surface」概念：日志保存全部事件，surface 决定哪些事件会投影成模型消息。`dsh-turn-sieve` 做的事是：
 
 1. 读取 `session.surface.nodes`，按 surface 顺序扫描事件：
-   - 整段模式：每遇到一条**真实用户输入**就开启一段新的问答；DSH 在每一步注入的运行时上下文（`Time sampled...`、`Current runtime context.`、`<system-reminder>`、`<hindsight_pages>` 等）虽然也以 `user/message` 记录，但会并入当前问答，不会把一段问答拆散。开头的 system/developer 上下文单独成组并受保护。
+   - 整段模式：每遇到一条**真实用户输入**就开启一段新的问答；DSH 在每一步注入的运行时上下文（`source.kind === 'runtime-context'`，以及旧会话里的 `Time sampled...`、`Current runtime context.`、`<system-reminder>`、`<hindsight_pages>` 等）虽然也以 `user/message` 记录，但会并入当前问答，不会把一段问答拆散。开头的 system/developer 上下文单独成组并受保护。
    - 单条模式：一条事件一个单元；assistant 消息中的 tool-call 会等待后续匹配的 tool-result 并合并成一个原子单元；此前删除留下的空 system 标记会被隐藏。
 2. 对每个单元生成预览、消息数量、工具调用数和 token 估算。
 3. 用户勾选后，为每个选中区间追加：
@@ -127,7 +127,7 @@ session.append('system/message', {
 - 只支持当前在 Host 中处于活动状态的会话；已归档或未加载的会话请先打开。
 - 撤销只有最近一次，且只保存在内存里；重启后无法撤销更早的操作。
 - token 数来自 `tokenMeter` 的估算，界面上显示为“约”，用于比较相对大小。
-- 需要 DSH `>= 0.2.0-rc.2`。
+- 需要 DSH `>= 0.2.2-rc.2`（Node.js `>= 24.9.0`）。
 
 ## 开发
 

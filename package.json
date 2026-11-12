@@ -1,6 +1,6 @@
 {
   "name": "dsh-turn-sieve",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Selectively remove low-value exchanges or individual messages from a DeepSeek Harness conversation without starting a new session, and undo the last deletion. 回合筛：按整段问答或单条消息清理当前会话，并支持撤销上一次删除。",
   "type": "module",
   "main": "lib/index.js",
@@ -21,8 +21,8 @@
     "test": "node test/sieve.test.mjs"
   },
   "engines": {
-    "node": "^22.19.0 || >=24.0.0",
-    "dsh": ">=0.2.0-rc.2"
+    "node": ">=24.9.0",
+    "dsh": ">=0.2.2-rc.2"
   },
   "dsh": {
     "bundle": {
