@@ -1,7 +1,7 @@
 {
   "name": "dsh-turn-sieve",
-  "version": "0.1.0",
-  "description": "Selectively remove low-value exchanges from a DeepSeek Harness conversation without starting a new session. 回合筛：从当前会话中按整段问答筛掉不再需要的对话，保留其余上下文。",
+  "version": "0.2.0",
+  "description": "Selectively remove low-value exchanges or individual messages from a DeepSeek Harness conversation without starting a new session, and undo the last deletion. 回合筛：按整段问答或单条消息清理当前会话，并支持撤销上一次删除。",
   "type": "module",
   "main": "lib/index.js",
   "exports": {

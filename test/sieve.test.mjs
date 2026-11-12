@@ -1,6 +1,12 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { collectGroups, pruneRanges } from '../lib/index.js';
+import {
+  collectGroups,
+  collectMessages,
+  pruneRanges,
+  publicState,
+  undoLast,
+} from '../lib/index.js';
 
 function makeSession() {
   const events = [
@@ -21,7 +27,7 @@ function makeSession() {
       data: {
         turn: 0,
         step: 0,
-        message: { id: 'a1', role: 'assistant', content: [{ type: 'text', text: 'first answer' }] },
+        message: { id: 'a1', role: 'assistant', source: { kind: 'model', provider: 'test', model: 'test' }, content: [{ type: 'text', text: 'first answer' }] },
       },
     },
     { seq: 4, type: 'turn/end', data: { turn: 0, reason: 'stop' } },
@@ -36,6 +42,7 @@ function makeSession() {
         message: {
           id: 'a2',
           role: 'assistant',
+          source: { kind: 'model', provider: 'test', model: 'test' },
           content: [
             { type: 'text', text: 'second answer' },
             { type: 'tool-call', id: 'call-1', name: 'read', arguments: '{}' },
@@ -52,7 +59,7 @@ function makeSession() {
       data: {
         turn: 2,
         step: 0,
-        message: { id: 'a3', role: 'assistant', content: [{ type: 'text', text: 'latest answer' }] },
+        message: { id: 'a3', role: 'assistant', source: { kind: 'model', provider: 'test', model: 'test' }, content: [{ type: 'text', text: 'latest answer' }] },
       },
     },
     { seq: 12, type: 'turn/end', data: { turn: 2, reason: 'stop' } },
@@ -78,20 +85,28 @@ function makeSession() {
     snapshotEvents(fromSeq = 0, toSeqExclusive = Number.POSITIVE_INFINITY) {
       return events.filter((event) => event.seq >= fromSeq && event.seq < toSeqExclusive);
     },
+    eventAt(seq) {
+      return events.find((event) => event.seq === seq);
+    },
     append(type, data, opts) {
       this.appends.push({ type, data, opts });
-      const { startSeq, endSeq } = opts.surfaceOp;
-      const startIndex = nodes.indexOf(startSeq);
-      const endIndex = nodes.indexOf(endSeq);
-      assert.notEqual(startIndex, -1);
-      assert.notEqual(endIndex, -1);
       const seq = this.seq;
       this.seq += 1;
-      events.push({ seq, type, data, surfaceOp: opts.surfaceOp });
-      nodes.splice(startIndex, endIndex - startIndex + 1, seq);
-      this.surface.replaceGeneration += 1;
-      this.surface.contentGeneration += 1;
-      return seq;
+      const event = { seq, type, data, surfaceOp: opts?.surfaceOp, sourceEventSeqs: opts?.sourceEventSeqs };
+      events.push(event);
+      if (opts?.surfaceOp === 'append' || opts?.surfaceOp?.op === 'append') {
+        nodes.push(seq);
+      } else {
+        const { startSeq, endSeq } = opts.surfaceOp;
+        const startIndex = nodes.indexOf(startSeq);
+        const endIndex = nodes.indexOf(endSeq);
+        assert.notEqual(startIndex, -1);
+        assert.notEqual(endIndex, -1);
+        nodes.splice(startIndex, endIndex - startIndex + 1, seq);
+        this.surface.replaceGeneration += 1;
+        this.surface.contentGeneration += 1;
+      }
+      return event;
     },
   };
 
@@ -150,7 +165,9 @@ test('prunes one exchange with an empty system replacement', () => {
   });
   assert.equal(append.data.turn, 0);
   assert.equal(append.data.step, 0);
+  assert.equal(result.mode, 'group');
   assert.equal(result.state.groups.length, 3);
+  assert.equal(result.undo.available, true);
 });
 
 test('refuses the protected latest exchange', () => {
@@ -178,12 +195,233 @@ test('refuses while a turn is open', () => {
 
 test('refuses overlapping selections', () => {
   const { session, tokenMeter } = makeSession();
-  // Two adjacent exchanges are separate ranges, not overlapping; a synthetic
-  // overlap can only be caught after lookup, so use the same range twice.
   const result = pruneRanges(session, [
     { startSeq: 2, endSeq: 3 },
     { startSeq: 2, endSeq: 3 },
   ], tokenMeter);
   assert.equal(result.ok, true);
   assert.equal(session.appends.length, 1);
+});
+
+test('splits the surface into message units and protects only the system head', () => {
+  const { session, tokenMeter } = makeSession();
+  const state = collectMessages(session, tokenMeter);
+
+  assert.equal(state.busy, false);
+  assert.equal(state.messages.length, 8);
+  assert.deepEqual(state.messages.map((message) => [message.startSeq, message.endSeq]), [
+    [1, 1],
+    [2, 2],
+    [3, 3],
+    [6, 6],
+    [7, 7],
+    [10, 10],
+    [11, 11],
+    [13, 13],
+  ]);
+  assert.deepEqual(state.messages.map((message) => message.deletable), [
+    false,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+  ]);
+  assert.equal(state.messages[0].protectedReason, 'system-prompt');
+  assert.equal(state.messages[4].toolCalls, 1);
+  assert.equal(state.messages[7].internal, true);
+  assert.equal(state.messages[1].title, 'first question');
+});
+
+test('keeps an assistant tool call atomic with its tool results', () => {
+  const events = [
+    { seq: 0, type: 'turn/start', data: { turn: 0 } },
+    {
+      seq: 1,
+      type: 'system/message',
+      data: {
+        turn: 0,
+        step: 0,
+        message: { id: 'sys', role: 'system', source: { kind: 'system-prompt' }, content: [{ type: 'text', text: 'system prompt' }] },
+      },
+    },
+    { seq: 2, type: 'user/message', data: { role: 'user', content: [{ type: 'text', text: 'use tools' }] } },
+    {
+      seq: 3,
+      type: 'assistant/message',
+      data: {
+        turn: 0,
+        step: 0,
+        message: {
+          id: 'a1',
+          role: 'assistant',
+          source: { kind: 'model', provider: 'test', model: 'test' },
+          content: [
+            { type: 'text', text: 'calling tools' },
+            { type: 'tool-call', id: 'call-a', name: 'read', arguments: '{}' },
+            { type: 'tool-call', id: 'call-b', name: 'read', arguments: '{}' },
+          ],
+        },
+      },
+    },
+    {
+      seq: 4,
+      type: 'tool/result',
+      data: {
+        turn: 0,
+        step: 0,
+        message: {
+          id: 'tr-a',
+          role: 'tool',
+          toolCallId: 'call-a',
+          source: { kind: 'tool', callId: 'call-a' },
+          content: [{ type: 'text', text: 'result A' }],
+        },
+      },
+    },
+    {
+      seq: 5,
+      type: 'tool/result',
+      data: {
+        turn: 0,
+        step: 0,
+        message: {
+          id: 'tr-b',
+          role: 'tool',
+          toolCallId: 'call-b',
+          source: { kind: 'tool', callId: 'call-b' },
+          content: [{ type: 'text', text: 'result B' }],
+        },
+      },
+    },
+    {
+      seq: 6,
+      type: 'assistant/message',
+      data: {
+        turn: 0,
+        step: 1,
+        message: { id: 'a2', role: 'assistant', source: { kind: 'model', provider: 'test', model: 'test' }, content: [{ type: 'text', text: 'done' }] },
+      },
+    },
+    { seq: 7, type: 'turn/end', data: { turn: 0, reason: 'stop' } },
+  ];
+  const nodes = [1, 2, 3, 4, 5, 6];
+  const session = {
+    id: 'session-tools',
+    appends: [],
+    seq: 8,
+    surface: { get nodes() { return [...nodes]; }, replaceGeneration: 0, contentGeneration: 0 },
+    snapshotEvents() { return [...events]; },
+    eventAt(seq) { return events.find((event) => event.seq === seq); },
+    append(type, data, opts) {
+      this.appends.push({ type, data, opts });
+      const seq = this.seq;
+      this.seq += 1;
+      events.push({ seq, type, data, surfaceOp: opts?.surfaceOp, sourceEventSeqs: opts?.sourceEventSeqs });
+      if (opts?.surfaceOp === 'append' || opts?.surfaceOp?.op === 'append') {
+        nodes.push(seq);
+      } else {
+        const { startSeq, endSeq } = opts.surfaceOp;
+        const startIndex = nodes.indexOf(startSeq);
+        const endIndex = nodes.indexOf(endSeq);
+        nodes.splice(startIndex, endIndex - startIndex + 1, seq);
+      }
+      return { seq };
+    },
+  };
+  const tokenMeter = { measure: () => ({ nodes: [], totalTokens: 100, surfaceTokens: 100 }) };
+
+  const state = collectMessages(session, tokenMeter);
+  assert.equal(state.messages.length, 4);
+  assert.deepEqual(state.messages[2].seqs, [3, 4, 5]);
+  assert.equal(state.messages[2].toolCalls, 2);
+  assert.equal(state.messages[2].toolResults, 2);
+
+  const result = pruneRanges(session, [{ startSeq: 3, endSeq: 5 }], tokenMeter, 'message');
+  assert.equal(result.ok, true);
+  assert.deepEqual(session.appends[0].opts.sourceEventSeqs, [3, 4, 5]);
+  assert.equal(result.undo.available, true);
+
+  const undo = undoLast(session, tokenMeter, 'message');
+  assert.equal(undo.ok, true);
+  assert.equal(undo.restored, 3);
+  assert.deepEqual(session.appends.slice(-3).map((append) => append.type), ['assistant/message', 'tool/result', 'tool/result']);
+  assert.deepEqual(session.appends.slice(-3).map((append) => append.opts.surfaceOp), ['append', 'append', 'append']);
+});
+
+test('prunes a single message in message mode', () => {
+  const { session, tokenMeter } = makeSession();
+  const result = pruneRanges(session, [{ startSeq: 2, endSeq: 2 }], tokenMeter, 'message');
+
+  assert.equal(result.ok, true);
+  assert.equal(result.mode, 'message');
+  assert.equal(result.freedTokens, 10);
+  assert.deepEqual(session.appends[0].opts.surfaceOp, { op: 'replace', startSeq: 2, endSeq: 2 });
+  assert.deepEqual(session.appends[0].opts.sourceEventSeqs, [2]);
+  assert.equal(result.state.messages.length, 7);
+  assert.equal(result.undo.available, true);
+});
+
+test('undoes the last message prune by appending the original at the end', () => {
+  const { session, tokenMeter } = makeSession();
+  pruneRanges(session, [{ startSeq: 2, endSeq: 2 }], tokenMeter, 'message');
+  const before = session.appends.length;
+
+  const undo = undoLast(session, tokenMeter, 'message');
+  assert.equal(undo.ok, true);
+  assert.equal(undo.restored, 1);
+  assert.equal(undo.mode, 'message');
+  assert.equal(undo.undo.available, false);
+  assert.equal(session.appends.length, before + 1);
+
+  const restored = session.appends.at(-1);
+  assert.equal(restored.type, 'user/message');
+  assert.equal(restored.opts.surfaceOp, 'append');
+  assert.equal(restored.data.content[0].text, 'first question');
+  assert.notEqual(restored.data.id, undefined);
+  assert.ok(undo.state.messages.at(-1).startSeq > 13);
+
+  const again = undoLast(session, tokenMeter, 'message');
+  assert.equal(again.ok, false);
+  assert.equal(again.code, 'no_undo');
+});
+
+test('undoes a whole exchange and restores every original message in order', () => {
+  const { session, tokenMeter } = makeSession();
+  pruneRanges(session, [{ startSeq: 2, endSeq: 3 }], tokenMeter, 'group');
+  const before = session.appends.length;
+
+  const undo = undoLast(session, tokenMeter, 'group');
+  assert.equal(undo.ok, true);
+  assert.equal(undo.restored, 2);
+  assert.deepEqual(session.appends.slice(before).map((append) => append.type), ['user/message', 'assistant/message']);
+  assert.equal(session.appends.at(-1).data.message.content[0].text, 'first answer');
+});
+
+test('refuses to undo while a turn is open', () => {
+  const { session, events, tokenMeter } = makeSession();
+  pruneRanges(session, [{ startSeq: 2, endSeq: 2 }], tokenMeter, 'message');
+  events.push({ seq: session.seq, type: 'turn/start', data: { turn: 9 } });
+
+  const undo = undoLast(session, tokenMeter, 'message');
+  assert.equal(undo.ok, false);
+  assert.equal(undo.code, 'busy');
+});
+
+test('strips internal surface bookkeeping from the wire state', () => {
+  const { session, tokenMeter } = makeSession();
+  const wire = publicState(collectMessages(session, tokenMeter));
+  assert.equal(wire.messages.length, 8);
+  assert.equal('seqs' in wire.messages[0], false);
+  assert.equal('pendingCallIds' in wire.messages[4], false);
+  assert.doesNotThrow(() => JSON.stringify(wire));
+});
+
+test('refuses to prune the protected system head in message mode', () => {
+  const { session, tokenMeter } = makeSession();
+  const result = pruneRanges(session, [{ startSeq: 1, endSeq: 1 }], tokenMeter, 'message');
+  assert.equal(result.ok, false);
+  assert.equal(result.code, 'protected');
 });
