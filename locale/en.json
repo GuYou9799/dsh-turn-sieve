@@ -1,6 +1,6 @@
 {
   "meta": {
     "title": "Turn Sieve (dsh-turn-sieve)",
-    "description": "Selectively drop whole Q&A exchanges or individual messages from the current conversation, or use the “Sieve” action beside any assistant reply to remove that exact part, and undo the last deletion. The system context is protected and the append-only log is kept."
+    "description": "Selectively drop whole Q&A exchanges or individual messages from the current conversation, or use the “Sieve” action beside any assistant reply to select, highlight and remove that exact part in place, and undo the last deletion. The main panel offers a liquid-glass look with motion toggles. The system context is protected and the append-only log is kept."
   }
 }
