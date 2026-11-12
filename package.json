@@ -1,0 +1,63 @@
+{
+  "name": "dsh-turn-sieve",
+  "version": "0.1.0",
+  "description": "Selectively remove low-value exchanges from a DeepSeek Harness conversation without starting a new session. 回合筛：从当前会话中按整段问答筛掉不再需要的对话，保留其余上下文。",
+  "type": "module",
+  "main": "lib/index.js",
+  "exports": {
+    ".": "./lib/index.js",
+    "./client": "./lib/client.js",
+    "./locale/*.json": "./locale/*.json",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib",
+    "locale",
+    "cordis.patch.yml",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "test": "node test/sieve.test.mjs"
+  },
+  "engines": {
+    "node": "^22.19.0 || >=24.0.0",
+    "dsh": ">=0.2.0-rc.2"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "immediately": true,
+      "inject": [
+        "@deepseek-ai/dsh-client-ui-conversation"
+      ]
+    }
+  },
+  "keywords": [
+    "dsh",
+    "dsh-plugin",
+    "deepseek-harness",
+    "context",
+    "conversation",
+    "prune",
+    "compact",
+    "context-management"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/GuYou9799/dsh-turn-sieve.git"
+  },
+  "homepage": "https://github.com/GuYou9799/dsh-turn-sieve#readme",
+  "bugs": {
+    "url": "https://github.com/GuYou9799/dsh-turn-sieve/issues"
+  },
+  "publishConfig": {
+    "registry": "https://registry.npmjs.org",
+    "access": "public"
+  },
+  "author": "Gu You",
+  "license": "MIT"
+}
