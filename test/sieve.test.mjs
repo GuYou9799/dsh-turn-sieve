@@ -3,6 +3,7 @@ import { test } from 'node:test';
 import {
   collectGroups,
   collectMessages,
+  lookupMessage,
   pruneRanges,
   publicState,
   undoLast,
@@ -286,6 +287,24 @@ test('recognizes runtime-context source without a known text prefix', () => {
   const messages = collectMessages(session);
   assert.equal(messages.messages[1].internal, true);
   assert.equal(messages.messages[2].internal, false);
+});
+
+test('locates a chat message in both selection modes', () => {
+  const { session, tokenMeter } = makeSession();
+  const found = lookupMessage(session, 'a1', tokenMeter);
+  assert.equal(found.busy, false);
+  assert.deepEqual([found.group.startSeq, found.group.endSeq], [2, 3]);
+  assert.equal(found.group.title, 'first question');
+  assert.equal(found.message.startSeq, 3);
+  assert.equal(found.message.kind, 'assistant');
+  assert.equal(found.message.preview, 'first answer');
+  assert.equal('seqs' in found.group, false);
+  assert.equal('seqs' in found.message, false);
+  assert.equal('pendingCallIds' in found.message, false);
+
+  const missing = lookupMessage(session, 'not-a-message', tokenMeter);
+  assert.equal(missing.group, undefined);
+  assert.equal(missing.message, undefined);
 });
 
 test('keeps an assistant tool call atomic with its tool results', () => {
