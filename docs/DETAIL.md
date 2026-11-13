@@ -1,0 +1,1 @@
+![Inline sieve in a DSH conversation: the selected exchange is highlighted in place with rounded corners, a funnel entry floats beside your own message, scope pills plus ✕ cancel and ✓ confirm sit inside the selection, and the liquid-glass Turn Sieve panel lists the same conversation with searchable rows, ticked exchanges and undo](preview.svg)

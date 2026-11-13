@@ -1,5 +1,7 @@
 # dsh-turn-sieve · 回合筛
 
+**中文** | [English README](README.en.md)
+
 > 不用新开会话，也能把一段对话里不再有价值的问答或单条消息从后续上下文中筛掉，并且可以撤销上一次删除。
 
 DSH 的会话日志是只追加的：一旦聊长了，早期的寒暄、走错方向的尝试、重复的排错过程就会一直占着上下文。`dsh-turn-sieve` 在会话右上角的工具区加了一个「回合筛」入口，把当前会话按**整段问答**或**单条消息**列出来，你可以勾掉不需要的部分，让它们不再进入后续请求。
@@ -140,8 +142,8 @@ DSH 的 `Session` 有一个「surface」概念：日志保存全部事件，surf
 
 ```js
 session.append('system/message', {
-  turn,
-  step: 0,
+  turn,                    // ≥ 1：format v4 要求 turn 为正数
+  step: index + 1,         // ≥ 1：format v4 要求 step 为正数
   message: { id, role: 'system', source: { kind: 'system-prompt' }, content: [] },
 }, {
   surfaceOp: { op: 'replace', startSeq, endSeq },
@@ -152,7 +154,7 @@ session.append('system/message', {
 空内容的 system message 不会投影成模型消息，因此整段区间从 `deriveMessages()` 中消失；日志本身没有被修改。
 
 4. 删除前把被覆盖的原始事件复制到内存的撤销槽；撤销时以 `surfaceOp: 'append'` 把它们重新追加到末尾，并写入一个 `turn-sieve-restored-…-r<startSeq>-<endSeq>` 标记。
-5. 每个删除标记的消息 id 里编码了被覆盖的区间（`turn-sieve-<stamp>-<index>-r<startSeq>-<endSeq>[-t<turns>]`）。`hiddenState(session)` 扫描会话事件即可还原“哪些区间被筛掉了”：把区间内每条事件映射成聊天节点 key（`13:input-message<消息 id>`、`14:assistant-step<turn>:<step>`、`9:tool-call<callId>`、`16:developer-message<消息 id>`），再加上整段模式里完整包含在该区间内的轮次号。客户端拿到 `{ keys, turns, ranges }` 后隐藏对应 DOM 节点，并在轮次容器内所有子节点都被隐藏时一并收起容器；一个 `MutationObserver` 负责在翻页、重新挂载后重新应用。
+5. 每个删除标记的消息 id 里编码了被覆盖的区间（`turn-sieve-<stamp>-<index>-r<startSeq>-<endSeq>[-t<turns>][-n<noticeTurns>]`）。`hiddenState(session)` 扫描会话事件即可还原“哪些区间被筛掉了”：把区间内每条事件映射成聊天节点 key（`13:input-message<消息 id>`、`14:assistant-step<turn>:<step>`、`9:tool-call<callId>`、`16:developer-message<消息 id>`），再加上整段模式里完整包含在该区间内的轮次号。客户端拿到 `{ keys, turns, noticeTurns, ranges }` 后隐藏对应 DOM 节点（`turns` 收起整轮，`noticeTurns` 只收起这些轮次里的提示卡片），并在轮次容器内所有子节点都被隐藏时一并收起容器；一个 `MutationObserver` 负责在翻页、重新挂载后重新应用。
 
 > 注意：替换会让该区间之后的 KV 缓存前缀失效。下一轮请求的输入会明显变小，但首 token 延迟可能略有变化，这是 surface 替换的正常代价。
 
@@ -168,7 +170,7 @@ session.append('system/message', {
 
 ## 外观与动效
 
-- **液态玻璃**：主面板默认采用液态玻璃质感——白色半透明渐变、`blur(46px) saturate(200%) brightness(1.14)` 的背景模糊、边缘高光、顶部斜向流光，以及背后两团缓慢漂移的柔光。面板内部会强制使用浅色文字与描边变量，因此即使 DSH 处于深色主题，面板依然通透明亮、不会发暗。标题栏的「液态玻璃」开关可以一键切回普通主题底色。
+- **液态玻璃（明亮通透）**：主面板默认采用液态玻璃质感——白色半透明渐变、`blur(46px) saturate(200%) brightness(1.14)` 的背景模糊、边缘高光、顶部斜向流光，以及背后两团缓慢漂移的柔光。面板内部会强制使用浅色文字与描边变量，因此即使 DSH 处于深色主题，面板依然通透明亮、不会发暗。标题栏的「液态玻璃」开关可以一键切回普通主题底色。
 - **动效**：「动效」开关控制两团柔光的漂移和流光扫过；关闭后玻璃质感保留但完全静止。液态玻璃关闭时该开关会自动禁用。
 - 两个开关都是带圆点的胶囊按钮，状态保存在浏览器 `localStorage`（键名 `dts-glass`、`dts-motion`），刷新后仍然生效。
 - 系统设置了 `prefers-reduced-motion: reduce` 时，动画会自动关闭，只保留静态玻璃质感。
@@ -186,6 +188,7 @@ session.append('system/message', {
 
 ## 更新记录
 
+- **0.7.1**：纯文档更新——新增英文 README（`README.en.md`）与中英各自的 About 详情文档（`docs/DETAIL.md`、`docs/DETAIL.zh.md`）和无文字预览插图，英文界面下插件详情页不再回落到中文 README；同时修正说明里过时的 `step: 0` 示例。
 - **0.7.0**：修复致命缺陷——筛除标记此前以 `turn/step = 0` 写入，而 DSH 的 format v4 写入校验要求两者必须为正数，于是自 0.2.0 起每次筛除都在第一步失败（`append_failed`），从未真正移除任何内容；现在标记使用 `turn ≥ 1`、`step = index + 1`。同时新增回合内提示卡片（已停止 / 本轮运行失败 / 已重试模型请求 / 上下文压缩等）的原位筛除与「恢复提示」，写入失败改为插件自己的错误说明而不再泄漏底层校验器文本，并修掉了每行助手消息都会重复请求 hidden 接口的性能问题。
 - **0.6.0**：对话里的每一行都能筛除（自己的发言左侧新增悬浮入口）；选中范围新增「提问 / 回复」；已停止与处理失败的回合同样可删；移除选中阴影左侧的黑色竖条；液态玻璃改为明亮通透的浅色玻璃。
 - **0.5.1**：✓ 改为确认删除、✕ 取消；筛除后内容直接从对话中消失（可撤销）。
@@ -204,10 +207,13 @@ npm test
 
 ```text
 lib/index.js        Host 插件：HTTP 路由（groups/prune/undo/lookup/hidden）、分组、surface 替换、隐藏区间推导、撤销、Agent 工具
-lib/client.js       Web 客户端：会话头部入口、助手回复与自己发言上的原位「筛除」、✓ 确认、聊天节点隐藏、液态玻璃面板、搜索与预览
-locale/*.json       插件市场元数据
+lib/client.js       Web 客户端：会话头部入口、助手回复/自己发言/提示卡片上的原位「筛除」、✓ 确认、聊天节点隐藏、液态玻璃面板、搜索与预览
+locale/*.json       插件元数据（各语言的标题、描述与 About 详情文档路径）
+docs/               About 页详情文档（中英各一份）与预览插图
 cordis.patch.yml    Bundle 插入补丁
-test/*.test.mjs     分组、移除、撤销、lookup、隐藏状态与客户端加载测试
+test/*.mjs          分组、移除、撤销、lookup、隐藏状态、文档与客户端加载测试
+README.md           中文说明
+README.en.md        English readme
 ```
 
 本地安装：
