@@ -71,4 +71,17 @@ if (!source.includes('--dsw-alias-label-primary:#15171c')) {
   throw new Error('liquid glass no longer redefines the label tokens for a bright panel');
 }
 if (!source.includes('/api/dsh-turn-sieve/hidden')) throw new Error('missing hidden-nodes route');
+// v0.7.0: every in-turn notice card must be sieveable on its own
+for (const name of [
+  'NOTICE_KINDS', 'NOTICE_KIND_SET', 'ensureNoticeControls', 'renderNoticeControl',
+  'dts-notice-sieve', 'dts-notices:', 'restoreAllNotices', 'hideNoticeKey',
+  'noticeTurns', 'hiddenNoticeTurns', 'append_failed', 'appendFailed',
+  'turn-error', 'turn-tail', 'turn-max-tokens', 'model-retry', 'manual-compaction',
+]) {
+  if (!source.includes(name)) throw new Error(`missing notice sieve code ${name}`);
+}
+// v0.7.0: notices of a pruned turn disappear together with that turn
+if (!source.includes('data-chat-flow-kind=')) {
+  throw new Error('notice hiding no longer matches the chat flow kind');
+}
 console.log('client module loaded; registrations:', names.join(', '));

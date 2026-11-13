@@ -10,6 +10,32 @@ import {
   undoLast,
 } from '../lib/index.js';
 
+/**
+ * Mirror the format-v4 writer that rejected every 0.5.x marker:
+ * `positive(data.turn, 'system/message turn')` and
+ * `positive(data.step, 'system/message step')` in
+ * dsh-session-persistence-jsonl/lib/worker.cjs (assertV4SystemMessageFields).
+ */
+function assertFormatV4Row(row) {
+  assert.equal(typeof row.type, 'string');
+  assert.equal(typeof row.data, 'object');
+  const positive = (value, subject) => {
+    assert.ok(Number.isSafeInteger(value) && value >= 1 && !Object.is(value, -0),
+      `${subject} must be positive, got ${String(value)}`);
+  };
+  if (row.type === 'system/message') {
+    positive(row.data.turn, 'system/message turn');
+    positive(row.data.step, 'system/message step');
+    assert.equal(row.data.message.role, 'system');
+    assert.ok(typeof row.data.message.id === 'string' && row.data.message.id.length > 0);
+    assert.ok(Array.isArray(row.data.message.content));
+  } else if (row.data.turn !== undefined || row.data.step !== undefined) {
+    if (row.data.turn !== undefined) positive(row.data.turn, `${row.type} turn`);
+    if (row.data.step !== undefined) positive(row.data.step, `${row.type} step`);
+  }
+  return true;
+}
+
 function makeSession() {
   const events = [
     { seq: 0, type: 'turn/start', data: { turn: 0 } },
@@ -165,8 +191,9 @@ test('prunes one exchange with an empty system replacement', () => {
     source: { kind: 'system-prompt' },
     content: [],
   });
-  assert.equal(append.data.turn, 0);
-  assert.equal(append.data.step, 0);
+  assert.equal(append.data.turn, 1, 'a unit whose turn is 0 still yields a positive marker turn');
+  assert.equal(append.data.step, 1);
+  assert.equal(assertFormatV4Row(append), true);
   assert.equal(result.mode, 'group');
   assert.equal(result.state.groups.length, 3);
   assert.equal(result.undo.available, true);
@@ -180,6 +207,7 @@ test('prunes the idle latest exchange, such as a stopped or failed turn', () => 
   assert.equal(result.freedTokens, 35);
   assert.equal(session.appends.length, 1);
   assert.deepEqual(session.appends[0].opts.surfaceOp, { op: 'replace', startSeq: 10, endSeq: 13 });
+  assert.equal(assertFormatV4Row(session.appends[0]), true);
 });
 
 test('keeps the newest exchange locked while the agent is still working', () => {
@@ -530,7 +558,13 @@ test('exposes chat node keys for the located units', () => {
   assert.deepEqual(found.message.nodeKeys, ['14:assistant-step1:0']);
   assert.deepEqual(found.group.nodeKeys, ['14:assistant-step1:0']);
   assert.deepEqual(found.group.fullTurns, [1]);
-  assert.deepEqual(found.hidden, { sessionId: 'session-lookup-keys', keys: [], turns: [], ranges: [] });
+  assert.deepEqual(found.hidden, {
+    sessionId: 'session-lookup-keys',
+    keys: [],
+    turns: [],
+    noticeTurns: [],
+    ranges: [],
+  });
 });
 
 test('derives the hidden chat nodes from the durable prune marker', () => {
@@ -539,23 +573,79 @@ test('derives the hidden chat nodes from the durable prune marker', () => {
   const pruned = pruneRanges(session, [{ startSeq: 6, endSeq: 7 }], tokenMeter, 'group');
 
   assert.equal(pruned.ok, true);
-  assert.match(session.appends[0].data.message.id, /^turn-sieve-[a-z0-9]+-0-r6-7-t1$/);
+  assert.match(session.appends[0].data.message.id, /^turn-sieve-[a-z0-9]+-0-r6-7-t1-n1$/);
   assert.deepEqual(pruned.hidden.keys, ['14:assistant-step1:0']);
   assert.deepEqual(pruned.hidden.turns, [1]);
+  assert.deepEqual(pruned.hidden.noticeTurns, [1]);
   assert.deepEqual(pruned.hidden.ranges, [{ startSeq: 6, endSeq: 7 }]);
 
   // A restarted host has no in-memory cache: the marker alone must rebuild it.
   const rebuilt = hiddenState({ id: 'session-hidden', snapshotEvents: () => session.snapshotEvents() });
   assert.deepEqual(rebuilt.keys, ['14:assistant-step1:0']);
   assert.deepEqual(rebuilt.turns, [1]);
+  assert.deepEqual(rebuilt.noticeTurns, [1]);
   assert.deepEqual(rebuilt.ranges, [{ startSeq: 6, endSeq: 7 }]);
 
   const undo = undoLast(session, tokenMeter, 'group');
   assert.equal(undo.ok, true);
   assert.deepEqual(undo.hidden.keys, []);
   assert.deepEqual(undo.hidden.turns, []);
+  assert.deepEqual(undo.hidden.noticeTurns, []);
   assert.deepEqual(undo.hidden.ranges, []);
   assert.match(session.appends.at(-1).data.message.id, /^turn-sieve-restored-[a-z0-9]+-r6-7$/);
   const afterUndo = hiddenState({ id: 'session-hidden', snapshotEvents: () => session.snapshotEvents() });
   assert.deepEqual(afterUndo.keys, []);
+  assert.deepEqual(afterUndo.noticeTurns, []);
+});
+
+test('keeps notice turns of a partially covered turn in the hide set', () => {
+  const { session, tokenMeter } = makeSession();
+  session.id = 'session-notice-turns';
+  // Turn 0 also owns the protected head at seq 1, so it is never a "full" turn
+  // of the exchange at 2..3 - its notice cards still have to disappear.
+  const pruned = pruneRanges(session, [{ startSeq: 2, endSeq: 3 }], tokenMeter, 'group');
+
+  assert.equal(pruned.ok, true);
+  assert.match(session.appends[0].data.message.id, /^turn-sieve-[a-z0-9]+-0-r2-3-n0$/);
+  assert.deepEqual(pruned.hidden.turns, []);
+  assert.deepEqual(pruned.hidden.noticeTurns, [0]);
+
+  const rebuilt = hiddenState({ id: 'session-notice-turns', snapshotEvents: () => session.snapshotEvents() });
+  assert.deepEqual(rebuilt.noticeTurns, [0], 'a restarted host rebuilds the notice turns from the marker');
+});
+
+test('gives every marker of one prune its own positive step', () => {
+  const { session, tokenMeter } = makeSession();
+  session.id = 'session-marker-steps';
+  const result = pruneRanges(session, [
+    { startSeq: 6, endSeq: 7 },
+    { startSeq: 10, endSeq: 13 },
+  ], tokenMeter, 'group');
+
+  assert.equal(result.ok, true);
+  assert.equal(session.appends.length, 2);
+  assert.deepEqual(
+    session.appends.map((append) => [append.data.turn, append.data.step]),
+    [[1, 1], [2, 2]],
+  );
+  for (const append of session.appends) assert.equal(assertFormatV4Row(append), true);
+});
+
+test('reports a plugin-level error instead of the writer internals', () => {
+  const { session, tokenMeter } = makeSession();
+  session.id = 'session-rejected';
+  session.append = () => {
+    throw new Error('format v4 system/message step must be positive');
+  };
+
+  const result = pruneRanges(session, [{ startSeq: 2, endSeq: 3 }], tokenMeter, 'group');
+
+  assert.equal(result.ok, false);
+  assert.equal(result.code, 'append_failed');
+  assert.equal(result.pruned.length, 0);
+  assert.equal(result.freedTokens, 0);
+  assert.ok(!result.message.includes('format v4'), 'the validator text must not become the user message');
+  assert.match(result.detail, /format v4 system\/message step must be positive/);
+  assert.equal(result.undo.available, false);
+  assert.deepEqual(result.hidden.keys, []);
 });
