@@ -170,7 +170,7 @@ Tool and interface share the same Host logic, so they behave identically, and re
 
 ## Appearance and motion
 
-- **Liquid glass (bright and translucent)**: the main panel uses a liquid-glass surface by default — a white translucent gradient, `blur(46px) saturate(200%) brightness(1.14)` background blur, edge highlights, a diagonal sheen across the top and two slowly drifting soft lights behind it. Inside the panel the plugin forces light-theme text and border variables, so the panel stays bright and translucent even when DSH runs a dark theme. The **Liquid glass** switch in the header returns to the plain theme background.
+- **Liquid glass**: the main panel uses a liquid-glass surface by default — a white translucent gradient, `blur(46px) saturate(200%) brightness(1.14)` background blur, edge highlights, a diagonal sheen across the top and two slowly drifting soft lights behind it. Inside the panel the plugin forces light-theme text and border variables, so the panel stays bright and translucent even when DSH runs a dark theme. The **Liquid glass** switch in the header returns to the plain theme background.
 - **Motion**: the **Motion** switch drives the drifting lights and the sheen; turning it off keeps the glass but freezes it completely. The switch disables itself when liquid glass is off.
 - Both switches are pill buttons with a status dot, stored in the browser `localStorage` (`dts-glass`, `dts-motion`) and still applied after a refresh.
 - With `prefers-reduced-motion: reduce` the animations turn off automatically and only the static glass remains.
