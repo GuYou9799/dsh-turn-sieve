@@ -130,16 +130,16 @@ function makeSession() {
   return { session, events, nodes, tokenMeter };
 }
 
-test('groups the surface into exchanges and protects system plus latest', () => {
+test('groups the surface into exchanges and protects only the system head while idle', () => {
   const { session, tokenMeter } = makeSession();
   const state = collectGroups(session, tokenMeter);
 
   assert.equal(state.busy, false);
   assert.equal(state.groups.length, 4);
   assert.deepEqual(state.groups.map((group) => [group.startSeq, group.endSeq]), [[1, 1], [2, 3], [6, 7], [10, 13]]);
-  assert.deepEqual(state.groups.map((group) => group.deletable), [false, true, true, false]);
+  assert.deepEqual(state.groups.map((group) => group.deletable), [false, true, true, true]);
   assert.equal(state.groups[0].protectedReason, 'system-prompt');
-  assert.equal(state.groups[3].protectedReason, 'latest-exchange');
+  assert.equal(state.groups[3].protectedReason, undefined);
   assert.equal(state.groups[1].title, 'first question');
   assert.equal(state.groups[2].toolCalls, 1);
   assert.equal(state.groups[3].parts.user, 2);
@@ -172,11 +172,28 @@ test('prunes one exchange with an empty system replacement', () => {
   assert.equal(result.undo.available, true);
 });
 
-test('refuses the protected latest exchange', () => {
+test('prunes the idle latest exchange, such as a stopped or failed turn', () => {
   const { session, tokenMeter } = makeSession();
   const result = pruneRanges(session, [{ startSeq: 10, endSeq: 13 }], tokenMeter);
+
+  assert.equal(result.ok, true);
+  assert.equal(result.freedTokens, 35);
+  assert.equal(session.appends.length, 1);
+  assert.deepEqual(session.appends[0].opts.surfaceOp, { op: 'replace', startSeq: 10, endSeq: 13 });
+});
+
+test('keeps the newest exchange locked while the agent is still working', () => {
+  const { session, events, tokenMeter } = makeSession();
+  events.push({ seq: 900, type: 'turn/start', data: { turn: 3 } });
+
+  const state = collectGroups(session, tokenMeter);
+  assert.equal(state.busy, true);
+  assert.equal(state.groups[3].deletable, false);
+  assert.equal(state.groups[3].protectedReason, 'busy-exchange');
+
+  const result = pruneRanges(session, [{ startSeq: 10, endSeq: 13 }], tokenMeter);
   assert.equal(result.ok, false);
-  assert.equal(result.code, 'protected');
+  assert.equal(result.code, 'busy');
   assert.equal(session.appends.length, 0);
 });
 
@@ -302,10 +319,16 @@ test('locates a chat message in both selection modes', () => {
   assert.equal('seqs' in found.group, false);
   assert.equal('seqs' in found.message, false);
   assert.equal('pendingCallIds' in found.message, false);
+  // The exchange is split into its prompt and reply so the chat action can offer
+  // "the prompt only" and "the reply only" next to "the whole exchange".
+  assert.deepEqual(found.parts.map((part) => [part.kind, part.startSeq, part.endSeq]), [['user', 2, 2], ['assistant', 3, 3]]);
+  assert.deepEqual(found.parts.map((part) => part.deletable), [true, true]);
+  assert.equal('seqs' in found.parts[0], false);
 
   const missing = lookupMessage(session, 'not-a-message', tokenMeter);
   assert.equal(missing.group, undefined);
   assert.equal(missing.message, undefined);
+  assert.deepEqual(missing.parts, []);
 });
 
 test('keeps an assistant tool call atomic with its tool results', () => {

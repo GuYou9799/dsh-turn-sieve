@@ -1,7 +1,7 @@
 {
   "name": "dsh-turn-sieve",
-  "version": "0.5.1",
-  "description": "Selectively remove low-value exchanges or individual messages from a DeepSeek Harness conversation: pick them right beside the assistant reply, confirm inline with ✓, watch the pruned part disappear from the transcript, and undo it any time. Liquid-glass panel with glass/motion toggles. 回合筛：在回复旁直接选中并 ✓ 确认删除，被筛除的内容立即从对话中消失，可随时撤销；主面板提供液态玻璃外观与动效开关。",
+  "version": "0.6.0",
+  "description": "Selectively remove low-value exchanges or individual messages from a DeepSeek Harness conversation: every chat row (yours and the assistant's) has an inline 筛除 entry, ✓ confirms and ✕ cancels with no dialog at all, and you choose between the whole exchange, only your prompt, only the reply, or a single message. Stopped and failed turns can be sieved too, the pruned part disappears from the transcript, and one undo brings it back. Bright liquid-glass panel with glass/motion toggles. 回合筛：对话里的每一行（你和智能体的）都能原位「筛除」，✓ 确认、✕ 取消，全程不弹窗；可按整段问答、仅我的提问、仅回复或单条消息自由选择，已停止/处理失败的回合同样可删，被筛除的内容立即从对话中消失，可随时撤销；主面板为明亮的液态玻璃外观并提供玻璃与动效开关。",
   "type": "module",
   "main": "lib/index.js",
   "exports": {
