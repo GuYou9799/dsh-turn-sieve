@@ -3,8 +3,10 @@ import { test } from 'node:test';
 import {
   collectGroups,
   collectMessages,
+  contextKey,
   hiddenState,
   lookupMessage,
+  nodeKeysForEvent,
   pruneRanges,
   publicState,
   undoLast,
@@ -648,4 +650,26 @@ test('reports a plugin-level error instead of the writer internals', () => {
   assert.match(result.detail, /format v4 system\/message step must be positive/);
   assert.equal(result.undo.available, false);
   assert.deepEqual(result.hidden.keys, []);
+});
+test('pins the chat node key mapping of DSH 0.2.2-rc.3', () => {
+  assert.equal(contextKey('input-message', 'abc'), '13:input-messageabc');
+  const cases = [
+    [{ type: 'user/message', data: { id: 'u1', role: 'user', content: [] } }, ['13:input-messageu1']],
+    [{ type: 'developer/message', data: { message: { id: 'd1', role: 'developer', content: [] } } }, ['17:developer-messaged1']],
+    [{ type: 'system/message', data: { message: { id: 's1', role: 'system', content: [] } } }, ['13:system-prompts1']],
+    [{ type: 'assistant/message', data: { turn: 6, step: 73, message: { id: 'a1', role: 'assistant', content: [] } } }, ['14:assistant-step6:73']],
+    [{ type: 'assistant/live-chunk', data: { turn: 6, step: 73 } }, ['14:assistant-step6:73']],
+    [{ type: 'step/start', data: { turn: 6, step: 73 } }, ['14:assistant-step6:73']],
+    [{ type: 'tool/call', data: { callId: 'call_abc' } }, ['9:tool-callcall_abc']],
+    [{ type: 'tool/result', data: { message: { toolCallId: 'call_abc', content: [] } } }, ['9:tool-callcall_abc']],
+    [{ type: 'tool/result', data: { message: { source: { callId: 'call_xyz' }, content: [] } } }, ['9:tool-callcall_xyz']],
+    // Notices are not surface events: they own a chat node but never a durable
+    // message id, so pruning them stays a client-side concern.
+    [{ type: 'turn/end', data: { turn: 6, reason: { kind: 'aborted' } } }, []],
+    [{ type: 'llm/retry', data: { turn: 6, retry: 1 } }, []],
+    [{ type: 'user/message', data: { role: 'user', content: [] } }, []],
+  ];
+  for (const [event, expected] of cases) {
+    assert.deepEqual(nodeKeysForEvent(event), expected, `${event.type} -> ${JSON.stringify(expected)}`);
+  }
 });

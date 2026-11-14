@@ -184,10 +184,11 @@ session.append('system/message', {
 - 隐藏状态按会话推导，多个浏览器标签页各自应用；另一个标签页需要刷新后才会同步隐藏效果。
 - 撤销只有最近一次，且只保存在内存里；重启后无法撤销更早的操作（已隐藏的内容仍会保持隐藏）。
 - token 数来自 `tokenMeter` 的估算，界面上显示为“约”，用于比较相对大小。
-- 需要 DSH `>= 0.2.2-rc.2`（Node.js `>= 24.9.0`）。
+- 需要 DSH `>= 0.2.2-rc.3`（Node.js `>= 24.9.0`）。
 
 ## 更新记录
 
+- **0.7.3**：适配并验证 DeepSeek Harness `0.2.2-rc.3`——逐包比对 rc.2/rc.3 两个 app.asar，插件依赖的 `dsh-client-ui-chat`（聊天节点定义、`data-chat-node-key` 等 DOM 属性、动作行悬停门控）、`dsh-client-ui-conversation`（节点 key 公式与插槽）、`dsh-session`、`dsh-session-persistence-jsonl`（format v4 写入校验）、`dsh-token-meter`、`dsh-host-webserver`、`dsh-agent-loop` 全部字节一致；rc.3 唯一新增的插槽是 `sidebar.session.action`，本插件用到的 `conversation.session.header.utilities` 与 `conversation.chat.assistant-actions` 定义未变。新增 `pins the chat node key mapping of DSH 0.2.2-rc.3` 回归测试（导出 `contextKey` / `nodeKeysForEvent` 并固化 12 组映射，含"提示类事件不属于 surface、因此没有持久消息 id"这一前提），文档里的引擎下限同步抬到 rc.3；运行时行为无变化。
 - **0.7.2**：文档修订——恢复仓库里对「外观与动效」小标题的精简措辞（去掉冗余的「（明亮通透）」），中英文 README 保持一致；运行时行为无变化。
 - **0.7.1**：纯文档更新——新增英文 README（`README.en.md`）与中英各自的 About 详情文档（`docs/DETAIL.md`、`docs/DETAIL.zh.md`）和无文字预览插图，英文界面下插件详情页不再回落到中文 README；同时修正说明里过时的 `step: 0` 示例。
 - **0.7.0**：修复致命缺陷——筛除标记此前以 `turn/step = 0` 写入，而 DSH 的 format v4 写入校验要求两者必须为正数，于是自 0.2.0 起每次筛除都在第一步失败（`append_failed`），从未真正移除任何内容；现在标记使用 `turn ≥ 1`、`step = index + 1`。同时新增回合内提示卡片（已停止 / 本轮运行失败 / 已重试模型请求 / 上下文压缩等）的原位筛除与「恢复提示」，写入失败改为插件自己的错误说明而不再泄漏底层校验器文本，并修掉了每行助手消息都会重复请求 hidden 接口的性能问题。

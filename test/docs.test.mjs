@@ -97,4 +97,17 @@ test('the manifest packages the docs and both readmes', () => {
     assert.ok(exists(entry), `${entry} exists on disk`);
   }
   assert.equal(manifest.exports['./locale/*.json'], './locale/*.json');
+  assert.equal(manifest.engines.dsh, '>=0.2.2-rc.3', 'the engine floor follows the verified host');
+  assert.equal(manifest.engines.node, '>=24.9.0');
+  assert.ok(!manifest.dependencies && !manifest.peerDependencies, 'stays dependency-free');
+  assert.equal(manifest.dsh.bundle.patch, './cordis.patch.yml', 'declares dsh.bundle (market requirement)');
+});
+
+test('both readmes document the verified host floor and the 0.7.3 changelog', () => {
+  for (const file of ['README.md', 'README.en.md']) {
+    const text = read(file);
+    assert.ok(text.includes('0.2.2-rc.3'), `${file}: names the rc.3 floor`);
+    assert.ok(!text.includes('0.2.2-rc.2'), `${file}: drops the rc.2 floor`);
+    assert.ok(/\*\*0\.7\.3\*\*/.test(text), `${file}: has a 0.7.3 changelog entry`);
+  }
 });
