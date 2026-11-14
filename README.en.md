@@ -38,7 +38,7 @@ No restart is needed: open any session and the funnel icon with **Turn Sieve** i
 ## Usage
 
 1. Open a session that already has several turns.
-2. Click **Turn Sieve** at the top right. The panel uses the liquid-glass look by default; the **Liquid glass** and **Motion** switches in its header can turn it off at any time and the preference is stored locally.
+2. Click **Turn Sieve** at the top right. The panel uses the host-native look by default (no backdrop blur, no looping animation); the **Effects** switch in its header turns on mask blur and the entrance animations, and the preference is stored locally.
 3. Pick a mode:
    - **By exchange**: one prompt together with every reply and tool call it produced, treated as a whole;
    - **By message**: tick individual messages, for example to drop one long reply or one tool output.
@@ -168,12 +168,14 @@ The plugin also registers a `turn_sieve` tool, so the assistant can list, remove
 
 Tool and interface share the same Host logic, so they behave identically, and removals still only affect the current session.
 
-## Appearance and motion
+## Appearance and effects
 
-- **Liquid glass**: the main panel uses a liquid-glass surface by default — a white translucent gradient, `blur(46px) saturate(200%) brightness(1.14)` background blur, edge highlights, a diagonal sheen across the top and two slowly drifting soft lights behind it. Inside the panel the plugin forces light-theme text and border variables, so the panel stays bright and translucent even when DSH runs a dark theme. The **Liquid glass** switch in the header returns to the plain theme background.
-- **Motion**: the **Motion** switch drives the drifting lights and the sheen; turning it off keeps the glass but freezes it completely. The switch disables itself when liquid glass is off.
-- Both switches are pill buttons with a status dot, stored in the browser `localStorage` (`dts-glass`, `dts-motion`) and still applied after a refresh.
-- With `prefers-reduced-motion: reduce` the animations turn off automatically and only the static glass remains.
+- **Default look**: the panel uses the host DSW variables directly (scrim `--dsw-alias-bg-mask-1`, surface `--dsw-alias-bg-overlay`, border `--dsw-alias-border-l2`), so light and dark themes both follow automatically. There is no backdrop blur and no looping animation, so an idle panel costs nothing per frame.
+- **Effects switch (off by default)**: turning it on adds background blur to exactly two large surfaces — the scrim with `var(--dsw-mask-blur, blur(8px)) saturate(140%)` and the panel with `blur(14px) saturate(150%)` over a 95% opaque surface — plus one-shot entrances (a `.24s` scrim fade and a `.34s` `translateY + scale` pop for the panel). Small cards in the list only ever get translucent overlays, never a blur, so scrolling stays smooth.
+- **Smoothness rules**: every animation runs once and only touches `opacity` / `transform` (compositor-only). The plugin has no looping animation, no decorative light blobs and no sheen layer, and `backdrop-filter` appears only on those two surfaces behind the switch.
+- **One kill switch**: the preference lives on the root attribute `data-dts-effects`; while it is off, a single rule forces `backdrop-filter` / `filter` / `animation` / `transition` / `will-change` back to none for everything the plugin renders, including the in-chat controls.
+- Stored in the browser `localStorage` (`dts-effects`) and still applied after a refresh; the two preference keys left over from older versions are removed on first run.
+- With `prefers-reduced-motion: reduce`, animation durations drop to `.01ms` and only the static look remains.
 - The deepened background, rounded corners and shadow of an in-place selection are mixed from the current text colour (`currentColor`), so they stay clearly visible in light and dark themes — with **no** hard vertical bar.
 
 ## Limitations
@@ -188,6 +190,7 @@ Tool and interface share the same Host logic, so they behave identically, and re
 
 ## Changelog
 
+- **0.7.4**: the panel look was rebuilt for smoothness — the liquid-glass layers that kept the compositor busy are gone (a full-viewport scrim blur, a `blur(46px)` panel, two `blur(46px)` decorative blobs with a sheen layer, and three looping animations; while enabled they made every frame re-sample the backdrop and measurably dropped frames). The default is now the host-native DSW surface, a new **Effects** switch (off by default) adds blur to two large surfaces plus one-shot entrances, and the root attribute `data-dts-effects` force-disables every filter / animation / transition the plugin renders. The in-chat ✓ / ✕, scope pills and selection highlight now use host variables too, the two stored preferences merge into a single `dts-effects`, and a style-budget regression test now forbids looping animations and decorative blur layers and only allows `backdrop-filter` behind the effects switch.
 - **0.7.3**: adapted to and verified against DeepSeek Harness `0.2.2-rc.3` — the rc.2 and rc.3 `app.asar` archives were compared package by package, and every dependency of this plugin is byte-identical: `dsh-client-ui-chat` (chat node definitions, the `data-chat-node-key` DOM attributes, the hover-gated action row), `dsh-client-ui-conversation` (the node key formula and the slots), `dsh-session`, `dsh-session-persistence-jsonl` (the format v4 write validator), `dsh-token-meter`, `dsh-host-webserver` and `dsh-agent-loop`. The only slot rc.3 adds is `sidebar.session.action`; the `conversation.session.header.utilities` and `conversation.chat.assistant-actions` definitions this plugin uses are unchanged. Adds the `pins the chat node key mapping of DSH 0.2.2-rc.3` regression test (`contextKey` / `nodeKeysForEvent` are now exported and 12 mappings are pinned, including the premise that notice events are not surface events and therefore have no durable message id), and the documented engine floor moves to rc.3; no runtime behaviour change.
 - **0.7.2**: documentation only — restores the shorter **Liquid glass** bullet label in the appearance section (the redundant “(bright and translucent)” suffix is gone) so both readmes agree; no runtime change.
 - **0.7.1**: documentation only — an English readme (`README.en.md`), a localized About document per locale (`docs/DETAIL.md`, `docs/DETAIL.zh.md`) with a text-free preview illustration, so the plugin detail page no longer falls back to the Chinese readme in an English UI; the stale `step: 0` sample is corrected as well.
@@ -211,7 +214,7 @@ Project layout:
 lib/index.js        Host plugin: HTTP routes (groups/prune/undo/lookup/hidden), grouping, surface replacement,
                     hidden-range derivation, undo, agent tool
 lib/client.js       Web client: session header entry, in-place Sieve on assistant replies, your own messages and
-                    notice cards, ✓ confirmation, chat-node hiding, liquid-glass panel, search and preview
+                    notice cards, ✓ confirmation, chat-node hiding, host-native panel with an effects switch, search and preview
 locale/*.json       Plugin metadata (title, description, detail document per locale)
 docs/               About-page detail documents and the preview illustration
 cordis.patch.yml    Bundle insertion patch

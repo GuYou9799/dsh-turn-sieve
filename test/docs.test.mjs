@@ -75,7 +75,7 @@ test('the English readme mirrors the Chinese one', () => {
   assert.ok(en.startsWith('# dsh-turn-sieve'), 'English readme keeps the package title');
   assert.ok(en.includes('[中文 README](README.md)'), 'English readme links back to Chinese');
   assert.ok(zh.includes('[English README](README.en.md)'), 'Chinese readme links to English');
-  for (const heading of ['## Installation', '## Usage', '## The two modes', '## Undo', '## Safety boundaries', '## How it works', '## Agent tool', '## Appearance and motion', '## Limitations', '## Changelog', '## Development', '## License']) {
+  for (const heading of ['## Installation', '## Usage', '## The two modes', '## Undo', '## Safety boundaries', '## How it works', '## Agent tool', '## Appearance and effects', '## Limitations', '## Changelog', '## Development', '## License']) {
     assert.ok(en.includes(heading), `English readme has ${heading}`);
   }
   assert.ok(en.length > 8000, 'English readme is a real translation, not a stub');
@@ -103,11 +103,51 @@ test('the manifest packages the docs and both readmes', () => {
   assert.equal(manifest.dsh.bundle.patch, './cordis.patch.yml', 'declares dsh.bundle (market requirement)');
 });
 
+test('the manifest version matches the newest changelog entry', () => {
+  const manifest = JSON.parse(read('package.json'));
+  const rank = (value) => value.split('.').map(Number);
+  const newest = (text) => [...text.matchAll(/\*\*(\d+\.\d+\.\d+)\*\*/g)]
+    .map((match) => match[1])
+    .sort((a, b) => {
+      const [x, y] = [rank(a), rank(b)];
+      return (x[0] - y[0]) || (x[1] - y[1]) || (x[2] - y[2]);
+    })
+    .at(-1);
+  for (const file of ['README.md', 'README.en.md']) {
+    assert.equal(newest(read(file)), manifest.version, `${file}: changelog head matches package.json`);
+  }
+});
+
 test('both readmes document the verified host floor and the 0.7.3 changelog', () => {
   for (const file of ['README.md', 'README.en.md']) {
     const text = read(file);
     assert.ok(text.includes('0.2.2-rc.3'), `${file}: names the rc.3 floor`);
     assert.ok(!text.includes('0.2.2-rc.2'), `${file}: drops the rc.2 floor`);
     assert.ok(/\*\*0\.7\.3\*\*/.test(text), `${file}: has a 0.7.3 changelog entry`);
+  }
+});
+
+test('both readmes describe the effects switch instead of liquid glass', () => {
+  const heads = { 'README.md': '## 外观与特效', 'README.en.md': '## Appearance and effects' };
+  for (const [file, head] of Object.entries(heads)) {
+    const text = read(file);
+    assert.ok(/\*\*0\.7\.4\*\*/.test(text), `${file}: has a 0.7.4 changelog entry`);
+    assert.ok(!/dts-glass|dts-motion/.test(text), `${file}: drops the removed preference keys`);
+    const start = text.indexOf(head);
+    assert.ok(start >= 0, `${file}: renames the appearance section`);
+    const section = text.slice(start, text.indexOf('\n## ', start + head.length));
+    assert.ok(section.includes('dts-effects'), `${file}: names the effects preference key`);
+    assert.ok(!/blur\(46px\)|blur\(52px\)|blur\(10px\)/.test(section), `${file}: no stale blur radius`);
+    assert.ok(!/液态玻璃|liquid glass|liquid-glass/i.test(section), `${file}: the appearance section stops promising liquid glass`);
+    assert.ok(/默认关闭|off by default/i.test(section), `${file}: documents that effects are off by default`);
+  }
+});
+
+test('nothing published names the visual reference', () => {
+  for (const file of ['package.json', 'locale/zh.json', 'locale/en.json', 'README.md', 'README.en.md', 'docs/DETAIL.md', 'docs/DETAIL.zh.md']) {
+    assert.ok(!/dsh-our-free-model|Ebony-Vinyl|ofm_|free-model/i.test(read(file)), `${file}: keeps the reference private`);
+  }
+  for (const file of ['package.json', 'locale/zh.json', 'locale/en.json', 'docs/DETAIL.md', 'docs/DETAIL.zh.md']) {
+    assert.ok(!/液态玻璃|liquid glass|liquid-glass/i.test(read(file)), `${file}: drops the liquid-glass wording`);
   }
 });

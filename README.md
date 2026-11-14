@@ -38,7 +38,7 @@ dsh plugin add dsh-turn-sieve
 ## 使用
 
 1. 打开一个已经聊了多轮的会话。
-2. 点击右上角的 **回合筛**。面板默认使用液态玻璃外观，标题栏的「液态玻璃」「动效」两个开关可以随时关闭，偏好会保存在本机。
+2. 点击右上角的 **回合筛**。面板默认使用宿主原生外观（无背景模糊、无循环动画）；标题栏的「特效」开关可以按需打开遮罩模糊与入场动画，偏好保存在本机。
 3. 选择模式：
    - **按整段**：一次提问及其后续全部回复、工具调用作为一个整体；
    - **按单条消息**：逐条勾选，适合只丢掉某一段冗长回复或某次工具输出。
@@ -168,12 +168,14 @@ session.append('system/message', {
 
 工具和界面共用同一套 Host 逻辑，行为一致。删除操作仍然只作用于当前会话。
 
-## 外观与动效
+## 外观与特效
 
-- **液态玻璃**：主面板默认采用液态玻璃质感——白色半透明渐变、`blur(46px) saturate(200%) brightness(1.14)` 的背景模糊、边缘高光、顶部斜向流光，以及背后两团缓慢漂移的柔光。面板内部会强制使用浅色文字与描边变量，因此即使 DSH 处于深色主题，面板依然通透明亮、不会发暗。标题栏的「液态玻璃」开关可以一键切回普通主题底色。
-- **动效**：「动效」开关控制两团柔光的漂移和流光扫过；关闭后玻璃质感保留但完全静止。液态玻璃关闭时该开关会自动禁用。
-- 两个开关都是带圆点的胶囊按钮，状态保存在浏览器 `localStorage`（键名 `dts-glass`、`dts-motion`），刷新后仍然生效。
-- 系统设置了 `prefers-reduced-motion: reduce` 时，动画会自动关闭，只保留静态玻璃质感。
+- **默认外观**：面板直接使用宿主的 DSW 变量（遮罩 `--dsw-alias-bg-mask-1`、面板底色 `--dsw-alias-bg-overlay`、描边 `--dsw-alias-border-l2`），浅色与深色主题都自动跟随；没有背景模糊，也没有循环动画，静置时每帧的合成成本为零。
+- **「特效」开关（默认关闭）**：打开后才会加上两层大面的背景模糊——遮罩 `var(--dsw-mask-blur, blur(8px)) saturate(140%)`、面板 `blur(14px) saturate(150%)` 配 95% 不透明底色——以及一次性入场动画（遮罩淡入 `.24s`，面板 `translateY + scale` 弹入 `.34s`）。列表里的小卡片一律只用半透明叠层、不加模糊，滚动因此保持顺滑。
+- **流畅性约束**：所有动画只播放一次，且只改 `opacity` / `transform`（走合成器）；插件不再有任何循环动画、装饰光斑或流光层，`backdrop-filter` 只出现在特效开启时的那两个大面上。
+- **一键熔断**：开关状态写在根元素属性 `data-dts-effects` 上；关闭时一条规则把插件渲染的所有元素的 `backdrop-filter` / `filter` / `animation` / `transition` / `will-change` 全部强制归零，对话内的原位控件同样生效。
+- 偏好保存在浏览器 `localStorage`（键名 `dts-effects`），刷新后仍然生效；旧版本遗留的两个偏好键会在首次运行时清理。
+- 系统设置了 `prefers-reduced-motion: reduce` 时，动画时长自动压到 `.01ms`，只保留静态外观。
 - 原位选中的加深背景、圆角与阴影基于当前文字颜色（`currentColor`）混合，浅色和深色主题下都清晰可见，并且**没有**任何硬边竖条。
 
 ## 限制
@@ -188,6 +190,7 @@ session.append('system/message', {
 
 ## 更新记录
 
+- **0.7.4**：重做面板视觉以保证流畅——移除持续占用合成器的液态玻璃层（全屏遮罩模糊、面板 `blur(46px)`、两团 `blur(46px)` 装饰光斑与流光层，以及 3 个循环动画；开启时它们会让每一帧都重新采样背景，实测掉帧）。默认改为宿主 DSW 变量的原生外观，新的「特效」开关（默认关闭）才加上两层大面模糊与一次性入场动画，并由根属性 `data-dts-effects` 一键熔断插件渲染的所有 filter / animation / transition。对话内的 ✓ / ✕、范围胶囊与选中高亮同步改用宿主变量，两个旧偏好合并为单个 `dts-effects`；新增样式预算回归测试（禁止循环动画、禁止装饰模糊层、`backdrop-filter` 只能挂在特效开关下）。
 - **0.7.3**：适配并验证 DeepSeek Harness `0.2.2-rc.3`——逐包比对 rc.2/rc.3 两个 app.asar，插件依赖的 `dsh-client-ui-chat`（聊天节点定义、`data-chat-node-key` 等 DOM 属性、动作行悬停门控）、`dsh-client-ui-conversation`（节点 key 公式与插槽）、`dsh-session`、`dsh-session-persistence-jsonl`（format v4 写入校验）、`dsh-token-meter`、`dsh-host-webserver`、`dsh-agent-loop` 全部字节一致；rc.3 唯一新增的插槽是 `sidebar.session.action`，本插件用到的 `conversation.session.header.utilities` 与 `conversation.chat.assistant-actions` 定义未变。新增 `pins the chat node key mapping of DSH 0.2.2-rc.3` 回归测试（导出 `contextKey` / `nodeKeysForEvent` 并固化 12 组映射，含"提示类事件不属于 surface、因此没有持久消息 id"这一前提），文档里的引擎下限同步抬到 rc.3；运行时行为无变化。
 - **0.7.2**：文档修订——恢复仓库里对「外观与动效」小标题的精简措辞（去掉冗余的「（明亮通透）」），中英文 README 保持一致；运行时行为无变化。
 - **0.7.1**：纯文档更新——新增英文 README（`README.en.md`）与中英各自的 About 详情文档（`docs/DETAIL.md`、`docs/DETAIL.zh.md`）和无文字预览插图，英文界面下插件详情页不再回落到中文 README；同时修正说明里过时的 `step: 0` 示例。
@@ -209,7 +212,7 @@ npm test
 
 ```text
 lib/index.js        Host 插件：HTTP 路由（groups/prune/undo/lookup/hidden）、分组、surface 替换、隐藏区间推导、撤销、Agent 工具
-lib/client.js       Web 客户端：会话头部入口、助手回复/自己发言/提示卡片上的原位「筛除」、✓ 确认、聊天节点隐藏、液态玻璃面板、搜索与预览
+lib/client.js       Web 客户端：会话头部入口、助手回复/自己发言/提示卡片上的原位「筛除」、✓ 确认、聊天节点隐藏、宿主原生外观与特效开关面板、搜索与预览
 locale/*.json       插件元数据（各语言的标题、描述与 About 详情文档路径）
 docs/               About 页详情文档（中英各一份）与预览插图
 cordis.patch.yml    Bundle 插入补丁

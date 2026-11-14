@@ -47,7 +47,7 @@ if (!names.includes('conversation.chat.assistant-actions:dsh-turn-sieve:quick'))
 for (const entry of registrations) {
   if (typeof entry.component !== 'function') throw new Error(`slot ${entry.definition.id} has no component`);
 }
-for (const name of ['dts-hidden-node', 'dts-selected-node', 'dts-sel-first', 'dts-sel-last', 'dts-force-reveal', 'dts-confirm', 'dts-cancel', 'dts-scope-pill', 'dts-sheen', 'dts-overlay-glass']) {
+for (const name of ['dts-hidden-node', 'dts-selected-node', 'dts-sel-first', 'dts-sel-last', 'dts-force-reveal', 'dts-confirm', 'dts-cancel', 'dts-scope-pill', 'data-dts-effects', 'dts-fadein', 'dts-popin']) {
   if (!source.includes(name)) throw new Error(`missing style rule for .${name}`);
 }
 for (const name of ['quickConfirmGroupTitle', 'quickConfirmMessageTitle', 'scopeGroup', 'scopeMessage', 'quickCancelSelection', 'scopePrompt', 'scopeReply', 'quickUserTitle', 'quickConfirmPromptTitle', 'quickConfirmReplyTitle']) {
@@ -63,12 +63,37 @@ for (const name of ['dts-user-sieve', 'ensureUserControls', '13:input-message', 
 if (/dts-selected-node[^}]*inset 3px 0 0/.test(source)) {
   throw new Error('the selection shadow still paints the dark left bar');
 }
-// v0.6.0: liquid glass must stay bright instead of darkening the panel
-if (/\.dts-dialog\.dts-glass\{[^}]*rgba\(24,24,27/.test(source)) {
-  throw new Error('liquid glass still uses the dark 0.5.x background');
+// v0.7.4: the panel must stay smooth — no liquid glass, no looping animation,
+// no decorative blur layer, and blur only behind the single effects switch.
+const css = source.slice(source.indexOf('const CSS ='), source.indexOf('function ensureStyle'));
+for (const name of ['.dts-glass', '.dts-motion', 'dts-sheen', 'dts-liquid-a', 'dts-liquid-b', 'dts-overlay-glass']) {
+  if (css.includes(name)) throw new Error(`stale liquid-glass artifact ${name} is still in the stylesheet`);
 }
-if (!source.includes('--dsw-alias-label-primary:#15171c')) {
-  throw new Error('liquid glass no longer redefines the label tokens for a bright panel');
+if (/\binfinite\b/.test(css)) throw new Error('the stylesheet still runs an infinite animation');
+if (/(^|[^-])filter:\s*blur\(/.test(css)) throw new Error('the stylesheet still rasterizes a blurred decorative layer');
+const backdropCount = (css.match(/[^-]backdrop-filter:/g) || []).length;
+if (backdropCount > 4) throw new Error(`too many backdrop filters for a smooth panel: ${backdropCount}`);
+for (const line of css.split('\n')) {
+  if (!line.includes('backdrop-filter:')) continue;
+  if (line.includes('[data-dts-effects=') || line.trimStart().startsWith('@media')) continue;
+  throw new Error(`backdrop-filter outside the effects switch: ${line.slice(0, 90)}`);
+}
+if (!/\[data-dts-effects="off"\][^{]*\{[^}]*animation:none!important/.test(css)) {
+  throw new Error('missing the single-attribute effects kill switch');
+}
+if (!css.includes('--dsw-alias-bg-mask-1')) throw new Error('the scrim no longer follows the host mask token');
+if (!/@keyframes dts-popin\{[^}]*transform:/.test(css)) {
+  throw new Error('the entrance animation no longer runs on transform/opacity only');
+}
+// v0.7.4: effects default to OFF and the legacy preferences are dropped
+if (!/readEffectsPref\(\)\s*\{[^}]*getItem\(EFFECTS_KEY\) === '1'/.test(source)) {
+  throw new Error('effects no longer default to off');
+}
+if (!source.includes("removeItem('dts-glass')") || !source.includes("removeItem('dts-motion')")) {
+  throw new Error('the legacy glass/motion preferences are not cleaned up');
+}
+for (const name of ['glassTitle', 'motionTitle', 'toggleGlass', 'toggleMotion', 'dts-overlay-glass']) {
+  if (source.includes(name)) throw new Error(`stale toggle code ${name} is still present`);
 }
 if (!source.includes('/api/dsh-turn-sieve/hidden')) throw new Error('missing hidden-nodes route');
 // v0.7.0: every in-turn notice card must be sieveable on its own
