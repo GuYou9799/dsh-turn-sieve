@@ -91,7 +91,7 @@ Every row in the list shows (and lets you verify):
 - whether it is a runtime injection;
 - why it is protected, when it is.
 
-After removal these parts no longer enter the following model context; the current context shrinks immediately and the next request already reflects it.
+After removal these parts no longer enter the following model context. The transcript and the list drop them immediately; the prune marker itself reaches the log when that chat starts its next step (DSH format v4 requires every row to carry the turn/step that is actually open — a row placed anywhere else makes the whole session unreadable on the next load), and from that moment the model context is shorter. If that chat never runs another step, no marker is written and the parts reappear after a reload; simply remove them again.
 
 ## The two modes
 
@@ -222,8 +222,25 @@ minimumReleaseAgeExclude:
 
 Or bypass the window once by passing `--config.minimum-release-age=0` to the pnpm command. The lines can be removed once the window has passed.
 
+## Troubleshooting: a session that refuses to load (`does not match an open turn and step`)
+
+If DSH reports `stored session … is corrupt: SessionFormatError: system/message does not match an open turn and step` when opening a chat, the cause is a prune marker that 1.1.0 and earlier wrote outside a turn; 1.2.0 can no longer produce such a row. Existing logs can be checked and repaired in place:
+
+```bash
+node scripts/audit-session.mjs "C:/Users/<you>/.dsh/sessions/<project>/<session id>/session.v4.jsonl.zstd"
+```
+
+It decompresses the log frame by frame, checks the turn/step of every row against the loader's rules, lists the offending rows and shows the result after dropping them. Once you have confirmed the violations are only trailing prune markers, repair the log:
+
+```bash
+node scripts/audit-session.mjs "<log path>" --fix
+```
+
+`--fix` first backs the log up to `<log path>.bak`, then truncates the trailing frames that hold the offending rows (a marker is always written last) and re-audits. It refuses to touch a log whose violations are not trailing, or whose very first frame already violates the rules — restore from the backup in that case.
+
 ## Changelog
 
+- **1.2.0**: fixes a serious bug that could make an entire session unopenable. 1.1.0 and earlier appended the prune marker to the end of the log and stamped it with a fabricated `turn: 1 / step: 1`; format v4 requires every `system/message` row to carry the turn/step that is actually open, so a single removal made outside a turn (after a reply had finished, for example) left the chat failing to load with `SessionFormatError: system/message does not match an open turn and step`. Removal and undo are now queued: a marker is written only when that chat really starts its next step, using that step's own coordinates, so an illegal row can no longer be produced, while the transcript still hides content immediately. Also fixed: every marker of one multi-range removal shares the single open step; a failed write no longer leaves the transcript stuck hidden and reports the reason in the panel; undoing a removal that was never written simply cancels the queue (`cancelled: true`) instead of leaving a half-record. Adds `scripts/audit-session.mjs`, which audits any session log against the loader's rules row by row and, with `--fix`, backs the log up and truncates the trailing frames holding the offending rows — that is how an already-corrupted 1.1.0 session is recovered. The regression suite now validates the turn/step of every written row against the real log rules (24 tests).
 - **1.1.0**: adds a diagnostic for failed plugin updates. `scripts/check-release-age.mjs` reads the profile's dependencies, asks npm when each one was published, lists the packages held back by DSH's `minimumReleaseAge` supply-chain policy, and prints the exact lines to add under `minimumReleaseAgeExclude`; the readme gains the matching troubleshooting section. This plugin is a `link:` dependency in the profile, so pnpm never resolves it from the registry and it cannot trip that policy. Runtime behaviour is identical to 1.0.1.
 - **1.0.1**: docs and automation. Both readmes gained six badges under the title (CI, npm, License: MIT, DSH version, Node version, market listing); a GitHub Actions workflow (`.github/workflows/ci.yml`) runs `npm test` on Node 24 with no dependency install; the regression suite now asserts the badges and the workflow, so the docs and CI cannot silently fall behind. Runtime behaviour is identical to 1.0.0.
 - **1.0.0**: first stable release. The selection feedback now lives on the selected chat nodes themselves — an 18px rounded tint plus one contained soft shadow — so a node is its own boundary: the highlight can never spill outside the conversation column or cover the sidebars and the panel. Whole exchanges, single messages, your own prompts and in-turn notice cards all share the same highlight, and an armed notice card shows it in the same frame as the click. The old absolutely positioned veil (measured wrong, drifting away while scrolling, sometimes landing elsewhere in the window) is deleted along with all its positioning and measurement code, so the flicker caused by rebuilding it on every paint is gone too. Effects, mode switching and long-list performance follow the 0.7.5 design. Tests: 23 host + 10 docs + client assembly.
