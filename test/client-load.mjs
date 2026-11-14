@@ -47,16 +47,16 @@ if (!names.includes('conversation.chat.assistant-actions:dsh-turn-sieve:quick'))
 for (const entry of registrations) {
   if (typeof entry.component !== 'function') throw new Error(`slot ${entry.definition.id} has no component`);
 }
-for (const name of ['dts-hidden-node', 'dts-selected-node', 'dts-sel-first', 'dts-sel-last', 'dts-force-reveal', 'dts-confirm', 'dts-cancel', 'dts-scope-pill', 'data-dts-effects', 'dts-fadein', 'dts-popin']) {
+for (const name of ['dts-hidden-node', 'dts-selected-node', 'dts-listin', 'content-visibility:auto', 'dts-force-reveal', 'dts-confirm', 'dts-cancel', 'dts-scope-pill', 'data-dts-effects', 'dts-fadein', 'dts-popin']) {
   if (!source.includes(name)) throw new Error(`missing style rule for .${name}`);
 }
 for (const name of ['quickConfirmGroupTitle', 'quickConfirmMessageTitle', 'scopeGroup', 'scopeMessage', 'quickCancelSelection', 'scopePrompt', 'scopeReply', 'quickUserTitle', 'quickConfirmPromptTitle', 'quickConfirmReplyTitle']) {
   if (!source.includes(name)) throw new Error(`missing string key ${name}`);
 }
-for (const name of ['dts-bubble', 'quickSwitchToMessage', 'quickRemoveGroup']) {
-  if (source.includes(name)) throw new Error(`stale v0.5.0 modal artifact ${name} is still present`);
+for (const name of ['dts-bubble', 'quickSwitchToMessage', 'quickRemoveGroup', 'dts-sel-first', 'dts-sel-last']) {
+  if (source.includes(name)) throw new Error(`stale artifact ${name} is still present`);
 }
-for (const name of ['dts-user-sieve', 'ensureUserControls', '13:input-message', 'dts-armed-host', 'function scopePlan', 'function availableScopes', 'function armFromMessage', 'function deleteSelection']) {
+for (const name of ['dts-user-sieve', 'ensureUserControls', '13:input-message', 'dts-armed-host', 'function scopePlan', 'function availableScopes', 'function armFromMessage', 'function deleteSelection', 'armedNoticeHost', 'cacheRef']) {
   if (!source.includes(name)) throw new Error(`missing user-row sieve code ${name}`);
 }
 // v0.6.0: the dark left bar inside the selection shadow must be gone
@@ -84,6 +84,52 @@ if (!/\[data-dts-effects="off"\][^{]*\{[^}]*animation:none!important/.test(css))
 if (!css.includes('--dsw-alias-bg-mask-1')) throw new Error('the scrim no longer follows the host mask token');
 if (!/@keyframes dts-popin\{[^}]*transform:/.test(css)) {
   throw new Error('the entrance animation no longer runs on transform/opacity only');
+}
+// v0.7.5: the selection highlight is the selected nodes' own rounded background.
+// An absolutely positioned overlay was removed for good: measured against a chat that
+// scrolls, pages and re-renders it kept ending up outside the conversation column,
+// while a node background cannot exceed the node by construction.
+if (!/\[data-chat-node-key\]\.dts-selected-node[^{]*\{[^}]*border-radius:18px/.test(css)) {
+  throw new Error('the selection highlight lost its rounded corners');
+}
+if (!/\[data-chat-node-key\]\.dts-selected-node[^{]*\{[^}]*box-shadow:0 12px 30px -16px/.test(css)) {
+  throw new Error('the selection highlight lost its contained soft shadow');
+}
+if (!/\[data-chat-node-key\]\.dts-selected-node[^{]*\{[^}]*background:color-mix/.test(css)) {
+  throw new Error('the selection highlight is not painted on the selected nodes any more');
+}
+if (/dts-selection-veil|layoutVeils|veilHostFor|VEIL_PAD/.test(source)) {
+  throw new Error('the absolutely positioned veil is back: it cannot be contained to the conversation column');
+}
+if (!source.includes('painted.forEach((el) => el.classList.add(SELECTED_NODE_CLASS));')) {
+  throw new Error('paintSelection no longer marks the selected nodes themselves');
+}
+if (/showDiag|TEMP-DIAG|dts-diag|__dtsDiag/.test(source)) {
+  throw new Error('the temporary self-check panel must never ship');
+}
+if (!source.includes('const ours = (node)')) {
+  throw new Error('the observer lost the filter that ignores in-chat control writes');
+}
+if (!source.includes('dts-armed-notice')) {
+  throw new Error('an armed notice card lost its own highlight class');
+}
+if (!/renderNoticeControl\(entry\);\s*paintSelection\(activeSelection\);/.test(source)) {
+  throw new Error('arming a notice card must repaint immediately, not on the next unrelated mutation');
+}
+if (!source.includes('function paintSelectionNow')) {
+  throw new Error('paintSelection lost its re-entrancy guard');
+}
+if (/\[data-dts-effects="on"\] \.dts-overlay\{[^}]*backdrop-filter/.test(css)) {
+  throw new Error('the full-viewport scrim blur is back and will cost frames');
+}
+if (!/\[data-dts-effects="on"\] \.dts-dialog\{[^}]*backdrop-filter:blur\(2\dpx/.test(css)) {
+  throw new Error('effects on no longer frost the panel visibly');
+}
+if (!/\[data-dts-effects="on"\] \.dts-list-wrap\{animation:dts-listin/.test(css)) {
+  throw new Error('the mode switch no longer animates under the effects switch');
+}
+if (source.includes('index: items.indexOf(item)')) {
+  throw new Error('the row list is quadratic again');
 }
 // v0.7.4: effects default to OFF and the legacy preferences are dropped
 if (!/readEffectsPref\(\)\s*\{[^}]*getItem\(EFFECTS_KEY\) === '1'/.test(source)) {
