@@ -151,3 +151,25 @@ test('nothing published names the visual reference', () => {
     assert.ok(!/液态玻璃|liquid glass|liquid-glass/i.test(read(file)), `${file}: drops the liquid-glass wording`);
   }
 });
+
+test('both readmes carry the CI, npm, licence, host and market badges', () => {
+  const workflow = '.github/workflows/ci.yml';
+  assert.ok(exists(workflow), 'the CI workflow must exist, otherwise the CI badge renders as "no status"');
+  const ci = read(workflow);
+  assert.match(ci, /npm test/, 'CI must actually run the suite');
+  assert.match(ci, /node-version:\s*\$\{\{\s*matrix\.node\s*\}\}/, 'CI must pin the Node version through the matrix');
+  assert.match(ci, /node:\s*\[24\]/, 'CI must run on Node 24, the floor this plugin needs');
+
+  for (const file of ['README.md', 'README.en.md']) {
+    const text = read(file);
+    assert.match(text, /actions\/workflows\/ci\.yml\/badge\.svg/, `${file}: CI badge`);
+    assert.match(text, /img\.shields\.io\/npm\/v\/dsh-turn-sieve/, `${file}: npm badge`);
+    assert.match(text, /License-MIT/, `${file}: MIT badge`);
+    assert.match(text, /badge\/DSH-0\.2\.2--rc\.3/, `${file}: DSH badge`);
+    assert.match(text, /node-%E2%89%A524\.9\.0/, `${file}: Node badge`);
+    assert.match(text, /dshmarket-listed/, `${file}: market badge`);
+    // The badges must sit directly under the title, before the language switch.
+    const head = text.split('\n').slice(0, 12).join('\n');
+    assert.match(head, /badge\.svg/, `${file}: badges belong under the title`);
+  }
+});

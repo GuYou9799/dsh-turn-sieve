@@ -1,5 +1,12 @@
 # dsh-turn-sieve · 回合筛
 
+[![CI](https://github.com/GuYou9799/dsh-turn-sieve/actions/workflows/ci.yml/badge.svg)](https://github.com/GuYou9799/dsh-turn-sieve/actions/workflows/ci.yml)
+[![npm](https://img.shields.io/npm/v/dsh-turn-sieve.svg)](https://www.npmjs.com/package/dsh-turn-sieve)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+![DSH 0.2.2-rc.3](https://img.shields.io/badge/DSH-0.2.2--rc.3-4c8dff.svg)
+![Node >= 24.9.0](https://img.shields.io/badge/node-%E2%89%A524.9.0-339933.svg)
+[![dshmarket](https://img.shields.io/badge/dshmarket-listed-8b5cf6.svg)](https://dshmarket.com)
+
 **中文** | [English README](README.en.md)
 
 > 不用新开会话，也能把一段对话里不再有价值的问答或单条消息从后续上下文中筛掉，并且可以撤销上一次删除。
