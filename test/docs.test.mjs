@@ -173,3 +173,32 @@ test('both readmes carry the CI, npm, licence, host and market badges', () => {
     assert.match(head, /badge\.svg/, `${file}: badges belong under the title`);
   }
 });
+
+test('both readmes document the release-age troubleshooting path', () => {
+  const files = {
+    'README.md': '## 故障排查：更新其他插件时报 release-age 错误',
+    'README.en.md': '## Troubleshooting: a release-age error while updating another plugin',
+  };
+  for (const [file, heading] of Object.entries(files)) {
+    const text = read(file);
+    assert.ok(text.includes(heading), `${file}: troubleshooting heading`);
+    assert.ok(text.includes('scripts/check-release-age.mjs'), `${file}: diagnostic path`);
+    assert.ok(text.includes('minimumReleaseAgeExclude'), `${file}: the yaml key to edit`);
+    assert.ok(text.includes('--config.minimum-release-age=0'), `${file}: the one-shot bypass`);
+    assert.ok(text.includes('link:'), `${file}: must explain why a linked plugin is exempt`);
+  }
+});
+
+test('the release-age diagnostic ships and imports only node builtins', () => {
+  const manifest = JSON.parse(read('package.json'));
+  assert.ok(manifest.files.includes('scripts'), 'files must ship scripts/');
+  const script = read('scripts/check-release-age.mjs');
+  assert.match(script, /minimumReleaseAgeExclude/, 'the script must name the setting it edits');
+  assert.match(script, /registry\.npmjs\.org/, 'the script must query npm publish times');
+  assert.ok(script.includes('/^(link|file|workspace):/'), 'the script must skip local dependencies');
+  const imports = [...script.matchAll(/from '([^']+)'/g)].map((match) => match[1]);
+  assert.ok(imports.length > 0, 'the script must import node builtins');
+  for (const specifier of imports) {
+    assert.match(specifier, /^node:/, `only node: builtins are allowed, found ${specifier}`);
+  }
+});

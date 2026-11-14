@@ -197,8 +197,34 @@ Tool and interface share the same Host logic, so they behave identically, and re
 - Token counts come from `tokenMeter` estimates and are shown as approximate — use them to compare relative sizes.
 - Requires DSH `>= 0.2.2-rc.3` (Node.js `>= 24.9.0`).
 
+## Troubleshooting: a release-age error while updating another plugin
+
+If updating any plugin in Plugin Manager fails outright and the log shows `ERR_PNPM_RESOLUTION_POLICY_VIOLATIONS_UNHANDLED` or “1 package violates the policy”, the blocker is DSH's supply-chain policy rather than this plugin:
+
+- DSH installs plugins with pnpm and enables `minimumReleaseAge` (an observation window, about 24 hours): a version younger than the window may not be installed automatically.
+- pnpm 11 verifies the **whole** lockfile before any mutation, so a single package still inside the window aborts the entire install — even when the plugin you are updating is a different one.
+- This plugin is a `link:` dependency in the profile (it points at a local directory), so pnpm never resolves it from the registry and it cannot be the offending package.
+
+Find the package that trips it:
+
+```bash
+node scripts/check-release-age.mjs
+```
+
+The script reads the profile's dependencies, asks npm when each one was published, lists the ones still inside the window and not yet exempted, and prints the lines to add.
+
+Fix: append those lines under `minimumReleaseAgeExclude` in `~/.dsh/profiles/desktop/pnpm-workspace.yaml`:
+
+```yaml
+minimumReleaseAgeExclude:
+  - some-package@1.2.3
+```
+
+Or bypass the window once by passing `--config.minimum-release-age=0` to the pnpm command. The lines can be removed once the window has passed.
+
 ## Changelog
 
+- **1.1.0**: adds a diagnostic for failed plugin updates. `scripts/check-release-age.mjs` reads the profile's dependencies, asks npm when each one was published, lists the packages held back by DSH's `minimumReleaseAge` supply-chain policy, and prints the exact lines to add under `minimumReleaseAgeExclude`; the readme gains the matching troubleshooting section. This plugin is a `link:` dependency in the profile, so pnpm never resolves it from the registry and it cannot trip that policy. Runtime behaviour is identical to 1.0.1.
 - **1.0.1**: docs and automation. Both readmes gained six badges under the title (CI, npm, License: MIT, DSH version, Node version, market listing); a GitHub Actions workflow (`.github/workflows/ci.yml`) runs `npm test` on Node 24 with no dependency install; the regression suite now asserts the badges and the workflow, so the docs and CI cannot silently fall behind. Runtime behaviour is identical to 1.0.0.
 - **1.0.0**: first stable release. The selection feedback now lives on the selected chat nodes themselves — an 18px rounded tint plus one contained soft shadow — so a node is its own boundary: the highlight can never spill outside the conversation column or cover the sidebars and the panel. Whole exchanges, single messages, your own prompts and in-turn notice cards all share the same highlight, and an armed notice card shows it in the same frame as the click. The old absolutely positioned veil (measured wrong, drifting away while scrolling, sometimes landing elsewhere in the window) is deleted along with all its positioning and measurement code, so the flicker caused by rebuilding it on every paint is gone too. Effects, mode switching and long-list performance follow the 0.7.5 design. Tests: 23 host + 10 docs + client assembly.
 - **0.7.5**: three visual problems fixed. (1) The in-chat selection highlight is now painted on the selected chat nodes themselves — an 18px rounded tint plus one contained soft shadow — instead of a separate absolutely positioned layer, which was measured wrong, drifted away from the selection while scrolling and spilled outside the conversation column. The node is its own boundary, so the highlight can never exceed the conversation or cover the sidebars, and whole exchanges, single messages, your own prompts and in-turn notice cards all share the same rounded styling. (2) An armed in-turn notice card now gets that same highlight, so it finally gives visible feedback (before, only its buttons changed). (3) Effects were rebuilt: the full-viewport scrim blur is gone, replaced by a single frosted panel layer (`blur(22px) saturate(180%)` plus a static specular highlight) that is visibly different from the off state; switching between “By exchange” and “By message” renders from cache with a one-shot `.22s` fade instead of flashing; every row gained `content-visibility:auto` and the O(n²) `items.indexOf` call was removed. The style-budget test now pins all of it: the highlight must be painted on the nodes with an 18px radius and a contained shadow, no absolutely positioned layer may return, the scrim must not blur again, effects on must frost the panel, the list animation must stay behind the effects switch, and list rendering must not go quadratic again.
