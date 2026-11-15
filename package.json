@@ -1,7 +1,7 @@
 {
   "name": "dsh-turn-sieve",
-  "version": "1.2.0",
-  "description": "Turn Sieve · 回合筛 — prune low-value parts of a DeepSeek Harness chat in place: sieve a whole exchange, only your prompt, only the reply, a single message, or in-turn notice cards (stopped / failed / retried / compacted); ✓ confirms, ✕ cancels, no dialog, and one undo restores it. 1.2.0 fixes a bug that could make a session's log unreadable and ships scripts/audit-session.mjs to audit and repair such logs. 在对话里原位筛除低价值问答或单条消息，✓ 确认 ✕ 取消、全程不弹窗，可随时撤销；1.2.0 修好了会让会话日志损坏、整段对话打不开的缺陷，并附带会话审计与修复脚本。",
+  "version": "1.3.0",
+  "description": "Turn Sieve · 回合筛 — prune low-value parts of a DeepSeek Harness chat in place: sieve a whole exchange, only your prompt, only the reply, a single message, or in-turn notice cards (stopped / failed / retried / compacted); ✓ confirms, ✕ cancels, no dialog, and one undo restores it. 1.3.0 makes the sieve button appear on every message and notice card that renders later, and gives it its own row under the bubble so it never covers the message text. 在对话里原位筛除低价值问答或单条消息，✓ 确认 ✕ 取消、全程不弹窗，可随时撤销；1.3.0 修好了后渲染的消息与提示卡片没有「筛除」按钮、以及按钮压住正文的问题。",
   "type": "module",
   "main": "lib/index.js",
   "exports": {

@@ -155,4 +155,38 @@ for (const name of [
 if (!source.includes('data-chat-flow-kind=')) {
   throw new Error('notice hiding no longer matches the chat flow kind');
 }
+// v1.2.1: a card must be found through any key attribute the host emits, and its
+// control must be visible without a hover path that some cards never satisfy.
+for (const name of ['noticeHost', 'noticeStoreKey', 'parseNoticeKey', 'NOTICE_KEY_ATTRS', 'data-chat-flow-key']) {
+  if (!source.includes(name)) throw new Error(`missing notice host resolution ${name}`);
+}
+// v1.3.1: the notice control is a capsule that stays invisible until the card that
+// owns it is hovered, then takes pointer events back.
+if (!source.includes('.dts-notice-sieve:hover')) {
+  throw new Error('the notice control cannot be reached with the pointer at all');
+}
+if (!/.dts-notice-sieve{[^}]*opacity:0/.test(source) || !/.dts-notice-sieve{[^}]*pointer-events:none/.test(source)) {
+  throw new Error('the notice control is visible without hovering its card');
+}
+if (!/\[data-dts-notice-host\]:hover>\.dts-notice-sieve[^{]*{[^}]*pointer-events:auto/.test(source)) {
+  throw new Error('hovering the card never re-enables the notice control');
+}
+if (!source.includes("setAttribute('data-dts-notice-host', '1')")) {
+  throw new Error('the notice host is not tagged, so the reveal rule cannot match');
+}
+if (source.includes("'dts-user-sieve dts-notice-sieve'")) {
+  throw new Error('a notice root borrows the message control class and displaces it');
+}
+if (!source.includes("root.className = 'dts-notice-sieve'")) {
+  throw new Error('the notice control lost its own class');
+}
+if (!source.includes('catch { /* skip this card, keep the rest */ }')) {
+  throw new Error('one broken card can still abort the whole control pass');
+}
+if (!source.includes('catch { /* one broken card stays unsieveable */ }\n        return;')) {
+  throw new Error('the nothing-hidden branch returns before any control is created');
+}
+if (!source.includes('ensureUserControls(); } catch { /* keep whatever is already mounted */ }')) {
+  throw new Error('message controls are not refreshed independently of the notice pass');
+}
 console.log('client module loaded; registrations:', names.join(', '));
