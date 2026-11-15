@@ -2,3 +2,4 @@ node_modules/
 *.tgz
 .npm-cache-tmp/
 .DS_Store
+.patch-*.mjs
