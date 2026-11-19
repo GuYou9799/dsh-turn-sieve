@@ -3,7 +3,7 @@
 [![CI](https://github.com/GuYou9799/dsh-turn-sieve/actions/workflows/ci.yml/badge.svg)](https://github.com/GuYou9799/dsh-turn-sieve/actions/workflows/ci.yml)
 [![npm](https://img.shields.io/npm/v/dsh-turn-sieve.svg)](https://www.npmjs.com/package/dsh-turn-sieve)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-![DSH 0.2.2-rc.3](https://img.shields.io/badge/DSH-0.2.2--rc.3-4c8dff.svg)
+![DSH 0.2.2-rc.5](https://img.shields.io/badge/DSH-0.2.2--rc.5-4c8dff.svg)
 ![Node >= 24.9.0](https://img.shields.io/badge/node-%E2%89%A524.9.0-339933.svg)
 [![dshmarket](https://img.shields.io/badge/dshmarket-listed-8b5cf6.svg)](https://dshmarket.com)
 
@@ -194,7 +194,7 @@ session.append('system/message', {
 - 隐藏状态按会话推导，多个浏览器标签页各自应用；另一个标签页需要刷新后才会同步隐藏效果。
 - 撤销只有最近一次，且只保存在内存里；重启后无法撤销更早的操作（已隐藏的内容仍会保持隐藏）。
 - token 数来自 `tokenMeter` 的估算，界面上显示为“约”，用于比较相对大小。
-- 需要 DSH `>= 0.2.2-rc.3`（Node.js `>= 24.9.0`）。
+- 需要 DSH `>= 0.2.2-rc.3`，已在 `0.2.2-rc.5` 上验证（Node.js `>= 24.9.0`）。
 
 ## 故障排查：更新其他插件时报 release-age 错误
 
@@ -239,6 +239,7 @@ node scripts/audit-session.mjs "<日志路径>" --fix
 
 ## 更新记录
 
+- **1.3.2**：适配并验证 DeepSeek Harness `0.2.2-rc.5`。逐包比对 rc.3 与 rc.5 后确认本插件用到的宿主接口全部未变，因此这一版没有代码改动：`dsh-client-ui-chat` 的 25 个 `data-chat-*` / `data-turn-*` DOM 属性与动作行、`dsh-client-ui-conversation` 的节点 key 公式 `conversationContextKey`（仍是 `${kind.length}:${kind}${id}`）与 32 个插槽 id、`dsh-session` 的全部 31 个文件、`dsh-token-meter`、`dsh-host-webserver` 的 `ctx.webServer.register` 路由契约（只有 `package.json` 变化）、`dsh-session-persistence-jsonl` 的 `requireStep` 校验与 `system/message` 的 turn/step 检查全部一致。rc.4 唯一的行为变化是把 web 搜索的提供方交给 `dsh-web` 按模型路由决定，与本插件无关；rc.3 与 rc.5 之间持久化 worker 的错误码表新增了 `CONTENT_REFUSED`（DeepSeek 拒答），本插件从不按错误码分类，被拒答的回合照常由宿主渲染成提示卡片、也照常可以筛除。运行时行为与 1.3.1 完全一致。
 - **1.3.1**：修掉一处会被插件市场误读的字符串。客户端构建戳原来写成四段数字 `1.3.1.0`（挂在 `document.documentElement.dataset.dtsBuild` 上，供排查旧 bundle 用），市场的信任扫描器把它当成了 IPv4 字面量，于是给本插件挂了一条「uses literal IP 1.3.1.0 for network access」的红线提示。现在改成 `1.3.1+b0`：排查方式不变，运行时行为与 1.3.0 完全一致。
 - **1.3.0**：修掉「筛除」按钮的一组问题。① 后出现的消息和对话中途才出现的提示卡片（例如「本轮运行失败」）根本没有按钮：负责刷新的 MutationObserver 回调里引用了两个早已删掉的标识符，回调在第一个 DOM 变化上就抛异常，于是挂载之后再也不刷新——挂载时已经在的消息有按钮，之后渲染的没有。现在回调改用真实判断（忽略插件自己写入的 dts- 元素），新消息、新卡片与整段对话重绘都会补上按钮。② 按钮压住正文：按钮原来浮在气泡角上，长消息铺满整行时正好落在文字上。现在改成气泡正下方独立的一行（与 DSH 自己回合末尾动作行同一套做法：常驻 22px 高度、悬停才显形），它占自己的空间，永远不会盖住正文。③ 提示卡片上的「筛除」不再是常驻小图标：改成与气泡下方同款的胶囊（22px 高、圆角、细边框、双层阴影），默认完全透明且不接收鼠标事件，鼠标移到它所属的那张卡片上才淡入，移开即消失；进入确认或正在请求时保持可见。工具栏内部原有的那个「筛除」不做任何改动。④ 修掉「同一条消息上叠着一摞一模一样的按钮」：客户端模块热更新后旧实例的按钮残留在 DOM 里，最多叠到 8 个；现在每个按钮带实例归属标记，新实例创建时清掉别人的残留。⑤ 修掉「鼠标移上去按钮反而消失」：按钮盒子原来整个落在气泡外，中间隔着不可命中的外边距，指针越过时行悬停先失效；现在盒子上沿与气泡重叠 8px，悬停不会中断，点击稳定。⑥ 助手回合末尾的动作行与下一条用户消息原来只隔 4px，看起来像被遮住；现在动作行加 16px 底边距（只动外边距，不改宿主盒子）。另外撤销了上一轮实验性的「给对话容器加 44px 内边距」改动——最后一条消息本来就不需要「筛除」按钮，不该为此改动输入面板与对话的间距。回归测试 24 项宿主端 + 13 项文档 + 客户端装配全部通过。
 - **1.2.0**：修复一个会让整个会话打不开的严重 bug。1.1.0 及更早版本把筛除标记直接追加在日志末尾，还给它编了一对 `turn: 1 / step: 1` 的坐标；DSH 的格式 v4 在加载时要求每个 `system/message` 行携带的 turn/step 与当时真正打开的一致，于是只要在回合之外（比如回复结束之后）筛除过一次，这个会话下次打开就会报 `SessionFormatError: system/message does not match an open turn and step`，整段对话都打不开。现在筛除与撤销都改为排队：标记只在这个对话真正进入下一个步骤时、用该步骤自己的 turn/step 写入，不可能再写出非法行，而界面上的收起、提示与撤销依然是即时的。同时修复：一次筛除多段时所有标记共用同一个打开中的步骤；写入失败时对话视图不会停留在隐藏状态，面板直接给出原因；撤销尚未落盘的筛除会直接取消队列（`cancelled: true`），不留半截记录。新增 `scripts/audit-session.mjs`，按加载器规则审计任意会话日志，`--fix` 先备份再截掉带非法行的尾部帧——已经被 1.1.0 写坏的会话可以靠它救回来。回归测试改为按真实日志规则校验每一行的 turn/step，共 24 项。

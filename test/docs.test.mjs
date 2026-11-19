@@ -122,6 +122,7 @@ test('both readmes document the verified host floor and the 0.7.3 changelog', ()
   for (const file of ['README.md', 'README.en.md']) {
     const text = read(file);
     assert.ok(text.includes('0.2.2-rc.3'), `${file}: names the rc.3 floor`);
+    assert.ok(text.includes('0.2.2-rc.5'), `${file}: names the rc.5 verification`);
     assert.ok(!text.includes('0.2.2-rc.2'), `${file}: drops the rc.2 floor`);
     assert.ok(/\*\*0\.7\.3\*\*/.test(text), `${file}: has a 0.7.3 changelog entry`);
   }
@@ -165,7 +166,7 @@ test('both readmes carry the CI, npm, licence, host and market badges', () => {
     assert.match(text, /actions\/workflows\/ci\.yml\/badge\.svg/, `${file}: CI badge`);
     assert.match(text, /img\.shields\.io\/npm\/v\/dsh-turn-sieve/, `${file}: npm badge`);
     assert.match(text, /License-MIT/, `${file}: MIT badge`);
-    assert.match(text, /badge\/DSH-0\.2\.2--rc\.3/, `${file}: DSH badge`);
+    assert.match(text, /badge\/DSH-0\.2\.2--rc\.5/, `${file}: DSH badge`);
     assert.match(text, /node-%E2%89%A524\.9\.0/, `${file}: Node badge`);
     assert.match(text, /dshmarket-listed/, `${file}: market badge`);
     // The badges must sit directly under the title, before the language switch.

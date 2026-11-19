@@ -742,7 +742,7 @@ test('reports a failed append without leaving the chat view hidden', () => {
   assert.match(hidden.pendingError ?? '', /format v4 system\/message step must be positive/);
   assert.deepEqual(hidden.keys, [], 'a failed append must not keep hiding content');
 });
-test('pins the chat node key mapping of DSH 0.2.2-rc.3', () => {
+test('pins the chat node key mapping of DSH 0.2.2-rc.5', () => {
   assert.equal(contextKey('input-message', 'abc'), '13:input-messageabc');
   const cases = [
     [{ type: 'user/message', data: { id: 'u1', role: 'user', content: [] } }, ['13:input-messageu1']],
