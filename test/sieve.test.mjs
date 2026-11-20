@@ -93,7 +93,7 @@ function makeSession() {
         message: { id: 'sys', role: 'system', source: { kind: 'system-prompt' }, content: [{ type: 'text', text: 'system prompt' }] },
       },
     },
-    { seq: 2, type: 'user/message', data: { role: 'user', content: [{ type: 'text', text: 'first question' }] } },
+    { seq: 2, type: 'user/message', data: { id: 'u1', role: 'user', content: [{ type: 'text', text: 'first question' }] } },
     {
       seq: 3,
       type: 'assistant/message',
@@ -105,7 +105,7 @@ function makeSession() {
     },
     { seq: 4, type: 'turn/end', data: { turn: 0, reason: 'stop' } },
     { seq: 5, type: 'turn/start', data: { turn: 1 } },
-    { seq: 6, type: 'user/message', data: { role: 'user', content: [{ type: 'text', text: 'second question' }] } },
+    { seq: 6, type: 'user/message', data: { id: 'u2', role: 'user', content: [{ type: 'text', text: 'second question' }] } },
     {
       seq: 7,
       type: 'assistant/message',
@@ -125,7 +125,7 @@ function makeSession() {
     },
     { seq: 8, type: 'turn/end', data: { turn: 1, reason: 'stop' } },
     { seq: 9, type: 'turn/start', data: { turn: 2 } },
-    { seq: 10, type: 'user/message', data: { role: 'user', content: [{ type: 'text', text: 'latest question' }] } },
+    { seq: 10, type: 'user/message', data: { id: 'u3', role: 'user', content: [{ type: 'text', text: 'latest question' }] } },
     {
       seq: 11,
       type: 'assistant/message',
@@ -551,6 +551,72 @@ test('prunes a single message in message mode', () => {
   assert.equal(result.undo.available, true);
 });
 
+test('prunes only the reply of an exchange and keeps the prompt', () => {
+  const { session, events, tokenMeter } = makeSession();
+  session.id = 'session-reply-only';
+  const pruned = pruneRanges(session, [{ startSeq: 3, endSeq: 3 }], tokenMeter, 'message');
+
+  assert.equal(pruned.ok, true);
+  assert.equal(pruned.mode, 'message');
+  openNextStep(session, events);
+  assert.deepEqual(session.appends[0].opts.surfaceOp, { op: 'replace', startSeq: 3, endSeq: 3 });
+  assert.deepEqual(pruned.hidden.keys, ['14:assistant-step0:0']);
+  assert.deepEqual(pruned.hidden.ranges, [{ startSeq: 3, endSeq: 3 }]);
+  const messages = collectMessages(session, tokenMeter).messages;
+  assert.ok(messages.some((unit) => unit.startSeq === 2), 'the prompt stays in the surface');
+  assert.ok(!messages.some((unit) => unit.startSeq === 3), 'the reply is gone from the surface');
+});
+
+test('injected mid-turn context never splits an exchange', () => {
+  // DSH logs every injected context as a user/message surface node, and the live
+  // session carried seven distinct kinds. A kind the plugin does not recognise
+  // starts its own exchange, which used to leave the prompt alone in a group that
+  // ended before the reply: sieving "the whole exchange" then removed only the
+  // prompt, and the reply was left in place (reported 2026-11-20).
+  const injected = ['runtime-context', 'time-context', 'dsh-ops:step-tail', 'plugin:hindsight', 'skill-catalog', 'model-selection'];
+  const events = [
+    { seq: 0, type: 'turn/start', data: { turn: 1 } },
+    { seq: 1, type: 'system/message', data: { turn: 1, step: 1, message: { id: 'sys', role: 'system', source: { kind: 'system-prompt' }, content: [{ type: 'text', text: 'system prompt' }] } } },
+    { seq: 2, type: 'user/message', data: { id: 'prompt', source: { kind: 'user' }, role: 'user', content: [{ type: 'text', text: 'the only real prompt' }] } },
+    ...injected.map((kind, index) => ({
+      seq: 3 + index,
+      type: 'user/message',
+      data: { id: 'inj-' + kind, source: { kind }, role: 'user', content: [{ type: 'text', text: 'injected ' + kind }] },
+    })),
+    { seq: 9, type: 'assistant/message', data: { turn: 1, step: 1, message: { id: 'reply', role: 'assistant', source: { kind: 'model', provider: 'test', model: 'test' }, content: [{ type: 'text', text: 'the reply' }] } } },
+    { seq: 10, type: 'turn/end', data: { turn: 1, reason: 'stop' } },
+  ];
+  const surface = events.filter((event) => ['system/message', 'user/message', 'assistant/message'].includes(event.type)).map((event) => event.seq);
+  const session = { id: 'session-injected', seq: 11, surface: { get nodes() { return [...surface]; } }, snapshotEvents: (a = 0, b = Infinity) => events.filter((event) => event.seq >= a && event.seq < b) };
+  const state = collectGroups(session, { measure: () => ({ nodes: [] }) });
+
+  assert.equal(state.groups.length, 2, 'the system head plus exactly one exchange');
+  const exchange = state.groups[1];
+  assert.deepEqual([exchange.startSeq, exchange.endSeq], [2, 9], 'the exchange spans prompt through reply');
+  assert.deepEqual(exchange.turns, [1]);
+
+  const found = lookupMessage(session, 'reply', { measure: () => ({ nodes: [] }) });
+  const prompts = found.parts.filter((part) => part.kind === 'user' && part.internal !== true);
+  assert.equal(prompts.length, 1, 'only the real prompt counts as the prompt');
+  assert.deepEqual(prompts[0].nodeKeys, ['13:input-messageprompt']);
+  assert.ok(found.parts.some((part) => part.kind === 'assistant'), 'the reply belongs to the same exchange');
+  assert.ok(found.group.nodeKeys.includes('13:input-messageprompt'), 'the exchange covers the prompt node');
+  assert.ok(found.group.nodeKeys.some((key) => key.startsWith('14:assistant-step')), 'and the reply node');
+});
+
+test('sieving only the prompt leaves the reply in place', () => {
+  const { session, events, tokenMeter } = makeSession();
+  session.id = 'session-prompt-only';
+  const pruned = pruneRanges(session, [{ startSeq: 6, endSeq: 6 }], tokenMeter, 'message');
+
+  assert.equal(pruned.ok, true);
+  openNextStep(session, events);
+  assert.deepEqual(pruned.hidden.keys, ['13:input-messageu2'], 'only the prompt row is shadowed');
+  const messages = collectMessages(session, tokenMeter).messages;
+  assert.ok(!messages.some((unit) => unit.startSeq === 6), 'the prompt is gone from the surface');
+  assert.ok(messages.some((unit) => unit.startSeq === 7), 'the reply stays in the surface');
+});
+
 test('undoes the last message prune by appending the original at the end', () => {
   const { session, events, tokenMeter } = makeSession();
   pruneRanges(session, [{ startSeq: 2, endSeq: 2 }], tokenMeter, 'message');
@@ -626,7 +692,8 @@ test('exposes chat node keys for the located units', () => {
   const found = lookupMessage(session, 'a2', tokenMeter);
 
   assert.deepEqual(found.message.nodeKeys, ['14:assistant-step1:0']);
-  assert.deepEqual(found.group.nodeKeys, ['14:assistant-step1:0']);
+  // The exchange the reply belongs to spans prompt + reply, so "整段" can cover both.
+  assert.deepEqual(found.group.nodeKeys, ['13:input-messageu2', '14:assistant-step1:0']);
   assert.deepEqual(found.group.fullTurns, [1]);
   assert.deepEqual(found.hidden, {
     sessionId: 'session-lookup-keys',
@@ -647,14 +714,15 @@ test('derives the hidden chat nodes from the durable prune marker', () => {
   assert.equal(pruned.ok, true);
   openNextStep(session, events);
   assert.match(session.appends[0].data.message.id, /^turn-sieve-[a-z0-9]+-0-r6-7-t1-n1$/);
-  assert.deepEqual(pruned.hidden.keys, ['14:assistant-step1:0']);
+  const exchangeKeys = ['13:input-messageu2', '14:assistant-step1:0'];
+  assert.deepEqual(pruned.hidden.keys, exchangeKeys, 'a whole exchange hides its prompt and its reply');
   assert.deepEqual(pruned.hidden.turns, [1]);
   assert.deepEqual(pruned.hidden.noticeTurns, [1]);
   assert.deepEqual(pruned.hidden.ranges, [{ startSeq: 6, endSeq: 7 }]);
 
   // A restarted host has no in-memory cache: the marker alone must rebuild it.
   const rebuilt = hiddenState({ id: 'session-hidden', snapshotEvents: () => session.snapshotEvents() });
-  assert.deepEqual(rebuilt.keys, ['14:assistant-step1:0']);
+  assert.deepEqual(rebuilt.keys, exchangeKeys);
   assert.deepEqual(rebuilt.turns, [1]);
   assert.deepEqual(rebuilt.noticeTurns, [1]);
   assert.deepEqual(rebuilt.ranges, [{ startSeq: 6, endSeq: 7 }]);

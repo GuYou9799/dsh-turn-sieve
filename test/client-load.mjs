@@ -3,6 +3,7 @@ import vm from 'node:vm';
 
 const source = fs.readFileSync('lib/client.js', 'utf8');
 const registrations = [];
+let loaded = null;
 const React = {
   createElement: () => null,
   useState: (value) => [typeof value === 'function' ? value() : value, () => {}],
@@ -20,6 +21,7 @@ const window = {
         throw new Error(`unexpected require ${name}`);
       });
       if (plugin.name !== 'dsh-turn-sieve') throw new Error('missing plugin name');
+      loaded = plugin;
       plugin.apply({
         slots: {
           inject(name, run) { run(); },
@@ -47,7 +49,7 @@ if (!names.includes('conversation.chat.assistant-actions:dsh-turn-sieve:quick'))
 for (const entry of registrations) {
   if (typeof entry.component !== 'function') throw new Error(`slot ${entry.definition.id} has no component`);
 }
-for (const name of ['dts-hidden-node', 'dts-selected-node', 'dts-listin', 'content-visibility:auto', 'dts-force-reveal', 'dts-confirm', 'dts-cancel', 'dts-scope-pill', 'data-dts-effects', 'dts-fadein', 'dts-popin']) {
+for (const name of ['dts-hidden-node', 'dts-selected-node', 'dts-veil', 'dts-veil-box', 'dts-listin', 'content-visibility:auto', 'dts-force-reveal', 'dts-confirm', 'dts-cancel', 'dts-scope-pill', 'data-dts-effects', 'dts-fadein', 'dts-popin']) {
   if (!source.includes(name)) throw new Error(`missing style rule for .${name}`);
 }
 for (const name of ['quickConfirmGroupTitle', 'quickConfirmMessageTitle', 'scopeGroup', 'scopeMessage', 'quickCancelSelection', 'scopePrompt', 'scopeReply', 'quickUserTitle', 'quickConfirmPromptTitle', 'quickConfirmReplyTitle']) {
@@ -183,10 +185,76 @@ if (!source.includes("root.className = 'dts-notice-sieve'")) {
 if (!source.includes('catch { /* skip this card, keep the rest */ }')) {
   throw new Error('one broken card can still abort the whole control pass');
 }
-if (!source.includes('catch { /* one broken card stays unsieveable */ }\n        return;')) {
+if (!source.includes('catch { /* one broken card stays unsieveable */ }')) {
   throw new Error('the nothing-hidden branch returns before any control is created');
+}
+if (!source.includes('try { paintSelection(activeSelection); } catch { /* the preview is cosmetic */ }\n        return;')) {
+  throw new Error('the nothing-hidden branch returns without repainting an armed preview');
 }
 if (!source.includes('ensureUserControls(); } catch { /* keep whatever is already mounted */ }')) {
   throw new Error('message controls are not refreshed independently of the notice pass');
+}
+// v1.3.3: the preview is one region, not a pile of per-row tints.
+if (!source.includes("setAttribute('data-dts-veil', 'on')")) {
+  throw new Error('the selection region layer is never switched on');
+}
+if (!source.includes("document.querySelectorAll('[data-chat-group-key]')")) {
+  throw new Error('the collapsed process group is left out of the selection region');
+}
+const mergeRuns = loaded?.__test?.mergeRuns;
+if (typeof mergeRuns !== 'function') throw new Error('mergeRuns is not exposed for geometry checks');
+const stacked = mergeRuns([
+  { left: 10, top: 0, right: 110, bottom: 20 },
+  { left: 10, top: 22, right: 110, bottom: 40 },
+  { left: 10, top: 41, right: 110, bottom: 60 },
+]);
+if (stacked.length !== 1) throw new Error(`adjacent rows must merge into one box, got ${stacked.length}`);
+if (stacked[0].top !== 0 || stacked[0].left !== 10) throw new Error('the merged box lost its origin');
+if (stacked[0].width !== 100 || stacked[0].height !== 60) {
+  throw new Error(`the merged box is ${stacked[0].width}x${stacked[0].height}, expected 100x60`);
+}
+const split = mergeRuns([
+  { left: 10, top: 0, right: 110, bottom: 20 },
+  { left: 10, top: 100, right: 110, bottom: 120 },
+]);
+if (split.length !== 2) throw new Error(`separated rows must stay apart, got ${split.length}`);
+if (split[0].height !== 20 || split[1].height !== 20) throw new Error('a separated box lost its height');
+const hollow = mergeRuns([
+  { left: 0, top: 0, right: 100, bottom: 20 },
+  { left: 200, top: 0, right: 300, bottom: 20 },
+]);
+if (hollow.length !== 2) throw new Error('side-by-side boxes must not merge into one wide box');
+
+// The region must live in the transcript's own coordinates: a viewport-anchored
+// layer slides away from its rows as soon as the user turns the wheel, which is
+// exactly the bug this asserts against.
+if (source.includes('position:fixed;pointer-events:none;z-index:2147482000')) {
+  throw new Error('the region is anchored to the viewport instead of the transcript');
+}
+if (!source.includes('host.appendChild(veilLayer)')) {
+  throw new Error('the region layer is not hosted by the transcript scroll container');
+}
+const veilFrame = loaded?.__test?.veilFrame;
+const toScrollRect = loaded?.__test?.toScrollRect;
+if (typeof veilFrame !== 'function' || typeof toScrollRect !== 'function') {
+  throw new Error('the region geometry is not exposed for checks');
+}
+const host = {
+  scrollTop: 0,
+  scrollLeft: 0,
+  clientTop: 0,
+  clientLeft: 0,
+  getBoundingClientRect: () => ({ left: 40, top: 100 }),
+};
+const atTop = toScrollRect({ left: 40, top: 300, right: 440, bottom: 340, width: 400, height: 40 }, veilFrame(host));
+if (atTop.top !== 200 || atTop.left !== 0) {
+  throw new Error(`the row is placed at ${atTop.left},${atTop.top} instead of 0,200`);
+}
+// Same row, measured again after the transcript scrolled by 120px: the box must
+// land on the very same pair, or the region would drift with the scroll.
+host.scrollTop = 120;
+const afterScroll = toScrollRect({ left: 40, top: 180, right: 440, bottom: 220, width: 400, height: 40 }, veilFrame(host));
+if (JSON.stringify(afterScroll) !== JSON.stringify(atTop)) {
+  throw new Error(`scrolling moved the region: ${JSON.stringify(atTop)} vs ${JSON.stringify(afterScroll)}`);
 }
 console.log('client module loaded; registrations:', names.join(', '));
