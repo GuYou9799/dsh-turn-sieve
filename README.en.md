@@ -29,15 +29,15 @@ Since 0.6.0, **every row in the chat can be sieved**, and no dialog is involved 
 
 ## Interface
 
-**Three entry points** — the 「Turn Sieve」 in the upper-right corner of the conversation, the 「Sieve Out」 in each reply’s action bar, and the 「Sieve Out」 button included with every message
+**Three entry points** — the 「回合筛」 in the upper-right corner of the conversation, the 「筛除」in each reply’s action bar, and the 「筛除」 button included with every message
 
 ![Three entry points](docs/1-dsh-turn-sieve.png)
 
-**Preview when 「Whole Turn」 is selected** — the prompt, the intermediate process, and this reply are framed as a single block; when the range is switched, this block changes immediately along with it:
+**Preview when 「整段」 is selected** — the prompt, the intermediate process, and this reply are framed as a single block; when the range is switched, this block changes immediately along with it:
 
 ![The Exchange preview](docs/2-dsh-turn-sieve.png)
 
-**Differences between the three ranges** — 「Whole Turn」 covers prompt + process + reply; 「Prompt」 frames only what you said; 「Reply」 frames only the assistant’s output:
+**Differences between the three ranges** — 「整段」 covers prompt + process + reply; 「提问」 frames only what you said; 「回复」 frames only the assistant’s output:
 
 ![The three scopes](docs/3-dsh-turn-sieve.png)
 
