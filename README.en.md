@@ -26,6 +26,25 @@ Since 0.6.0, **every row in the chat can be sieved**, and no dialog is involved 
 
 ![npm](https://img.shields.io/npm/v/dsh-turn-sieve)
 
+
+## Interface
+
+**Three entry points** — the 「Turn Sieve」 in the upper-right corner of the conversation, the 「Sieve Out」 in each reply’s action bar, and the 「Sieve Out」 button included with every message
+
+![Three entry points](docs/1-dsh-turn-sieve.png)
+
+**Preview when 「Whole Turn」 is selected** — the prompt, the intermediate process, and this reply are framed as a single block; when the range is switched, this block changes immediately along with it:
+
+![The Exchange preview](docs/2-dsh-turn-sieve.png)
+
+**Differences between the three ranges** — 「Whole Turn」 covers prompt + process + reply; 「Prompt」 frames only what you said; 「Reply」 frames only the assistant’s output:
+
+![The three scopes](docs/3-dsh-turn-sieve.png)
+
+**Main panel** — two views: Whole Turn / Single Item; searchable, checkable, one-click undo（for users to explore on their own）
+
+
+
 ## Installation
 
 In the DSH Web plugin page click **Add plugin** and enter:
