@@ -286,9 +286,13 @@ Install locally:
 dsh plugin add /absolute/path/to/dsh-turn-sieve
 ```
 
-## About the author and feedback
+## A note from the author
 
-The author is still a student and has little time to spend on visual polish, so the plugin inevitably carries rough edges and bugs. Reports about anything unreasonable in the plugin are welcome, and so is anyone who would like to collaborate — email is the way to reach me, and I reply to every message I see. Thank you for the support.
+The author is still a student and has little time to spend on visual polish, so the plugin inevitably carries rough edges and bugs. Thank you for the support.
+
+## Feedback
+
+Anything unreasonable in the plugin, or an idea worth collaborating on — email is the way to reach me. I reply to every message I see.
 
 Email: **microguyou@outlook.com**
 

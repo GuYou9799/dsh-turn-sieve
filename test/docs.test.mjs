@@ -75,7 +75,7 @@ test('the English readme mirrors the Chinese one', () => {
   assert.ok(en.startsWith('# dsh-turn-sieve'), 'English readme keeps the package title');
   assert.ok(en.includes('[中文 README](README.md)'), 'English readme links back to Chinese');
   assert.ok(zh.includes('[English README](README.en.md)'), 'Chinese readme links to English');
-  for (const heading of ['## Installation', '## Usage', '## The two modes', '## Undo', '## Safety boundaries', '## How it works', '## Agent tool', '## Appearance and effects', '## Limitations', '## Changelog', '## Development', '## About the author and feedback', '## License']) {
+  for (const heading of ['## Installation', '## Usage', '## The two modes', '## Undo', '## Safety boundaries', '## How it works', '## Agent tool', '## Appearance and effects', '## Limitations', '## Changelog', '## Development', '## A note from the author', '## Feedback', '## License']) {
     assert.ok(en.includes(heading), `English readme has ${heading}`);
   }
   assert.ok(en.length > 8000, 'English readme is a real translation, not a stub');
@@ -152,19 +152,29 @@ test('both readmes describe a host-native panel with no effects switch', () => {
   }
 });
 
-test('both readmes end with the same author note and contact address', () => {
-  const heads = { 'README.md': '## 关于作者与反馈', 'README.en.md': '## About the author and feedback' };
+test('both readmes end with an author note and a separate feedback section', () => {
+  const heads = {
+    'README.md': { note: '## 作者的话', feedback: '## 反馈', changelog: '## 更新记录' },
+    'README.en.md': { note: '## A note from the author', feedback: '## Feedback', changelog: '## Changelog' },
+  };
   for (const [file, head] of Object.entries(heads)) {
     const text = read(file);
-    const start = text.indexOf(head);
-    assert.ok(start >= 0, `${file}: has the author/feedback section`);
-    const section = text.slice(start);
-    assert.ok(section.includes('microguyou@outlook.com'), `${file}: publishes the contact address`);
-    assert.ok(/学生|student/i.test(section), `${file}: says who is maintaining it`);
-    assert.ok(/bug/i.test(section), `${file}: invites bug reports`);
-    // The note belongs at the end: it must come after the changelog, not float mid-document.
-    assert.ok(start > text.indexOf(file === 'README.md' ? '## 更新记录' : '## Changelog'), `${file}: the note sits after the changelog`);
-    assert.ok(start < text.indexOf('## License'), `${file}: the note sits before the license`);
+    const note = text.indexOf(head.note);
+    const feedback = text.indexOf(head.feedback);
+    const license = text.indexOf('## License');
+    assert.ok(note >= 0, `${file}: has the author note`);
+    assert.ok(feedback >= 0, `${file}: has the feedback section`);
+    // Two sections, in this order, both after the changelog and before the license.
+    assert.ok(note > text.indexOf(head.changelog), `${file}: the author note sits after the changelog`);
+    assert.ok(feedback > note, `${file}: feedback follows the author note`);
+    assert.ok(feedback < license, `${file}: feedback sits before the license`);
+    const noteText = text.slice(note, feedback);
+    const feedbackText = text.slice(feedback, license);
+    assert.ok(/学生|student/i.test(noteText), `${file}: the note says who is maintaining it`);
+    assert.ok(!/microguyou@outlook.com/.test(noteText), `${file}: the address belongs to the feedback section`);
+    assert.ok(/bug/i.test(noteText), `${file}: the note owns the rough-edges admission`);
+    assert.ok(feedbackText.includes('microguyou@outlook.com'), `${file}: feedback publishes the contact address`);
+    assert.ok(/合作|collaborat/i.test(feedbackText), `${file}: feedback invites collaboration`);
   }
 });
 
