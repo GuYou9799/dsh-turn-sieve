@@ -49,7 +49,7 @@ if (!names.includes('conversation.chat.assistant-actions:dsh-turn-sieve:quick'))
 for (const entry of registrations) {
   if (typeof entry.component !== 'function') throw new Error(`slot ${entry.definition.id} has no component`);
 }
-for (const name of ['dts-hidden-node', 'dts-selected-node', 'dts-veil', 'dts-veil-box', 'dts-listin', 'content-visibility:auto', 'dts-force-reveal', 'dts-confirm', 'dts-cancel', 'dts-scope-pill', 'data-dts-effects', 'dts-fadein', 'dts-popin']) {
+for (const name of ['dts-star', 'dts-star-glyph', 'dts-star-spark', 'dts-star-pop', 'dts-hidden-node', 'dts-selected-node', 'dts-veil', 'dts-veil-box', 'content-visibility:auto', 'dts-force-reveal', 'dts-confirm', 'dts-cancel', 'dts-scope-pill']) {
   if (!source.includes(name)) throw new Error(`missing style rule for .${name}`);
 }
 for (const name of ['quickConfirmGroupTitle', 'quickConfirmMessageTitle', 'scopeGroup', 'scopeMessage', 'quickCancelSelection', 'scopePrompt', 'scopeReply', 'quickUserTitle', 'quickConfirmPromptTitle', 'quickConfirmReplyTitle']) {
@@ -73,19 +73,16 @@ for (const name of ['.dts-glass', '.dts-motion', 'dts-sheen', 'dts-liquid-a', 'd
 }
 if (/\binfinite\b/.test(css)) throw new Error('the stylesheet still runs an infinite animation');
 if (/(^|[^-])filter:\s*blur\(/.test(css)) throw new Error('the stylesheet still rasterizes a blurred decorative layer');
-const backdropCount = (css.match(/[^-]backdrop-filter:/g) || []).length;
-if (backdropCount > 4) throw new Error(`too many backdrop filters for a smooth panel: ${backdropCount}`);
-for (const line of css.split('\n')) {
-  if (!line.includes('backdrop-filter:')) continue;
-  if (line.includes('[data-dts-effects=') || line.trimStart().startsWith('@media')) continue;
-  throw new Error(`backdrop-filter outside the effects switch: ${line.slice(0, 90)}`);
-}
-if (!/\[data-dts-effects="off"\][^{]*\{[^}]*animation:none!important/.test(css)) {
-  throw new Error('missing the single-attribute effects kill switch');
+// v1.4.1: the effects switch is gone, so the panel is ONE plain host surface.
+// A stray blur, gradient plate or effects-gated rule would now be unreachable
+// styling that nobody can turn off — assert the whole family is really removed.
+if (/[^-]backdrop-filter:/.test(css)) throw new Error('the panel still asks for a backdrop filter with no switch to turn it off');
+for (const name of ['data-dts-effects', 'dts-fadein', 'dts-popin', 'dts-listin', 'dts-toggle-dot', '.dts-toggle{']) {
+  if (css.includes(name)) throw new Error(`effects-era styling survived its removal: ${name}`);
 }
 if (!css.includes('--dsw-alias-bg-mask-1')) throw new Error('the scrim no longer follows the host mask token');
-if (!/@keyframes dts-popin\{[^}]*transform:/.test(css)) {
-  throw new Error('the entrance animation no longer runs on transform/opacity only');
+if (!/@keyframes dts-pop\{[^}]*transform:/.test(css)) {
+  throw new Error('the armed cluster lost its one-shot entrance');
 }
 // v0.7.5: the selection highlight is the selected nodes' own rounded background.
 // An absolutely positioned overlay was removed for good: measured against a chat that
@@ -121,24 +118,24 @@ if (!/renderNoticeControl\(entry\);\s*paintSelection\(activeSelection\);/.test(s
 if (!source.includes('function paintSelectionNow')) {
   throw new Error('paintSelection lost its re-entrancy guard');
 }
-if (/\[data-dts-effects="on"\] \.dts-overlay\{[^}]*backdrop-filter/.test(css)) {
+// The panel must never gain a full-viewport blur again: it is the one effect that
+// re-samples the whole transcript on every frame.
+if (/\.dts-overlay\{[^}]*backdrop-filter/.test(css)) {
   throw new Error('the full-viewport scrim blur is back and will cost frames');
-}
-if (!/\[data-dts-effects="on"\] \.dts-dialog\{[^}]*backdrop-filter:blur\(2\dpx/.test(css)) {
-  throw new Error('effects on no longer frost the panel visibly');
-}
-if (!/\[data-dts-effects="on"\] \.dts-list-wrap\{animation:dts-listin/.test(css)) {
-  throw new Error('the mode switch no longer animates under the effects switch');
 }
 if (source.includes('index: items.indexOf(item)')) {
   throw new Error('the row list is quadratic again');
 }
-// v0.7.4: effects default to OFF and the legacy preferences are dropped
-if (!/readEffectsPref\(\)\s*\{[^}]*getItem\(EFFECTS_KEY\) === '1'/.test(source)) {
-  throw new Error('effects no longer default to off');
+// v1.4.1: the retired preference keys are cleaned up, not merely ignored — a stale
+// dts-effects flag would otherwise re-apply a panel style nothing can switch off.
+for (const key of ['dts-effects', 'dts-star-offered', 'dts-glass', 'dts-motion']) {
+  if (!source.includes(`removeItem('${key}')`)) throw new Error(`the retired preference ${key} is not cleaned up`);
 }
-if (!source.includes("removeItem('dts-glass')") || !source.includes("removeItem('dts-motion')")) {
-  throw new Error('the legacy glass/motion preferences are not cleaned up');
+if (/function (readEffectsPref|applyEffectsPref|toggleEffects)/.test(source)) {
+  throw new Error('the effects switch is still wired up');
+}
+if (/localStorage\.setItem\(STAR_KEY/.test(source) || /\bL\.starred\b/.test(source)) {
+  throw new Error('the Star button still claims a Star the user may not have given');
 }
 for (const name of ['glassTitle', 'motionTitle', 'toggleGlass', 'toggleMotion', 'dts-overlay-glass']) {
   if (source.includes(name)) throw new Error(`stale toggle code ${name} is still present`);
@@ -256,5 +253,26 @@ host.scrollTop = 120;
 const afterScroll = toScrollRect({ left: 40, top: 180, right: 440, bottom: 220, width: 400, height: 40 }, veilFrame(host));
 if (JSON.stringify(afterScroll) !== JSON.stringify(atTop)) {
   throw new Error(`scrolling moved the region: ${JSON.stringify(atTop)} vs ${JSON.stringify(afterScroll)}`);
+}
+// v1.4.1: the panel header offers a Star and nothing else besides the close button.
+if (!source.includes("const STAR_URL = 'https://github.com/GuYou9799/dsh-turn-sieve'")) {
+  throw new Error('the Star nudge has no repository to open');
+}
+const starAt = source.indexOf("className: 'dts-star'");
+if (starAt < 0) throw new Error('the Star nudge is not rendered');
+if (!source.includes("window.open(STAR_URL, '_blank', 'noopener,noreferrer')")) {
+  throw new Error('the Star nudge does not open the repository in a new tab');
+}
+if (/ofm_star|dsh-our-free-model/.test(source)) {
+  throw new Error('the Star nudge must not reference another plugin');
+}
+// The header cluster must hold the Star and the close button only: the retired
+// effects switch left an empty wrapper that would keep reserving its slot.
+const toggles = source.slice(source.indexOf("className: 'dts-view-toggles'"), source.indexOf("className: 'dts-ghost'"));
+if (/dts-toggle/.test(toggles)) throw new Error('a toggle survived in the header cluster');
+// Clicking Star must not fabricate state: no stored flag, no "Starred" label.
+if (/STAR_KEY/.test(source)) throw new Error('the Star button still stores a guessed starred flag');
+if (!/const openRepo = \(\) => \{[\s\S]*?setNotice\(L\.starOpened\)/.test(source)) {
+  throw new Error('the Star click no longer reports that the repository was opened');
 }
 console.log('client module loaded; registrations:', names.join(', '));

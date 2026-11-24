@@ -26,25 +26,6 @@ Since 0.6.0, **every row in the chat can be sieved**, and no dialog is involved 
 
 ![npm](https://img.shields.io/npm/v/dsh-turn-sieve)
 
-
-## Interface
-
-**Three entry points** — the 「回合筛」 in the upper-right corner of the conversation, the 「筛除」in each reply’s action bar, and the 「筛除」 button included with every message
-
-![Three entry points](docs/1-dsh-turn-sieve.png)
-
-**Preview when 「整段」 is selected** — the prompt, the intermediate process, and this reply are framed as a single block; when the range is switched, this block changes immediately along with it:
-
-![The Exchange preview](docs/2-dsh-turn-sieve.png)
-
-**Differences between the three ranges** — 「整段」 covers prompt + process + reply; 「提问」 frames only what you said; 「回复」 frames only the assistant’s output:
-
-![The three scopes](docs/3-dsh-turn-sieve.png)
-
-**Main panel** — two views: Whole Turn / Single Item; searchable, checkable, one-click undo（for users to explore on their own）
-
-
-
 ## Installation
 
 In the DSH Web plugin page click **Add plugin** and enter:
@@ -64,7 +45,7 @@ No restart is needed: open any session and the funnel icon with **Turn Sieve** i
 ## Usage
 
 1. Open a session that already has several turns.
-2. Click **Turn Sieve** at the top right. The panel uses the host-native look by default (no backdrop blur, no looping animation); the **Effects** switch in its header turns on mask blur and the entrance animations, and the preference is stored locally.
+2. Click **Turn Sieve** at the top right. The panel is host-native: no backdrop blur, no looping animation, and it follows the light and dark themes.
 3. Pick a mode:
    - **By exchange**: one prompt together with every reply and tool call it produced, treated as a whole;
    - **By message**: tick individual messages, for example to drop one long reply or one tool output.
@@ -196,15 +177,13 @@ Tool and interface share the same Host logic, so they behave identically, and re
 
 ## Appearance and effects
 
-- **Default look**: the panel uses the host DSW variables directly (scrim `--dsw-alias-bg-mask-1`, surface `--dsw-alias-bg-overlay`, border `--dsw-alias-border-l2`), so light and dark themes both follow automatically. There is no backdrop blur and no looping animation, so an idle panel costs nothing per frame.
-- **Effects switch (off by default)**: turning it on frosts one surface only — the panel gets `blur(22px) saturate(180%)` over a 68% translucent surface, a brighter border and a static specular highlight. The scrim itself is a plain tint and is **never blurred**: a full-viewport `backdrop-filter` was exactly what cost frames in 0.7.4. Entrances stay one-shot (a `.2s` scrim fade and a `.34s` `translateY + scale` pop), so on and off are visibly different.
-- **Mode switching is no longer abrupt**: switching between “By exchange” and “By message” renders the previous payload instantly and refreshes quietly in the background, so there is no “clear → loading → refill” flash; the list container also plays a one-shot `.22s` fade-and-slide (only while effects are on).
-- **Long lists stay cheap**: every row carries `content-visibility:auto` with `contain-intrinsic-size`, so 1300+ messages only paint the rows in view, and the O(n²) `items.indexOf(item)` call is gone from rendering.
-- **Smoothness rules**: every animation runs once and only touches `opacity` / `transform` (compositor-only). The plugin has no looping animation, no decorative light blobs and no sheen layer, and `backdrop-filter` appears only on the panel behind the switch.
-- **One kill switch**: the preference lives on the root attribute `data-dts-effects`; while it is off, a single rule forces `backdrop-filter` / `filter` / `animation` / `transition` / `will-change` back to none for everything the plugin renders, including the in-chat controls.
-- Stored in the browser `localStorage` (`dts-effects`) and still applied after a refresh; the two preference keys left over from older versions are removed on first run.
+- **Effects are paused for now**: the visual-effects work is on hold because of the author's own limitations; it will be considered again once it is worth shipping. Ideas are welcome by email.
+- **Host-native surfaces only**: the panel uses the host DSW variables directly (scrim `--dsw-alias-bg-mask-1`, surface `--dsw-alias-bg-overlay`, border `--dsw-alias-border-l2`) and follows both light and dark themes. No backdrop blur, no decorative highlight, no looping animation — an idle panel costs nothing per frame.
+- **One-shot motion only**: every animation runs once and touches `opacity` / `transform` alone (compositor-only). Switching between the exchange and single-message views renders the previous payload instantly and refreshes quietly in the background, so there is no "clear → loading → repopulate" flicker.
+- **Long lists stay cheap**: every row carries `content-visibility:auto` with `contain-intrinsic-size`, so 1300+ messages only paint the rows in view.
 - With `prefers-reduced-motion: reduce`, animation durations drop to `.01ms` and only the static look remains.
-- **The highlight is painted on the selected messages themselves**: no extra absolutely positioned layer is generated any more — it kept being measured wrong, scrolling away from the selection and spilling outside the conversation column — instead every selected chat node gets its own rounded background (`border-radius:18px`, a translucent `currentColor` tint) plus one contained soft shadow (`0 12px 30px -16px`, no horizontal overshoot). The node is its own boundary, so the highlight can never cover the sidebars or the panel; whole exchanges, single messages, your own prompts and in-turn notice cards all share the same styling, with uniform rounded corners and no hard vertical bar.
+- **The highlight is painted on the selected messages themselves**: no extra absolutely positioned layer — measured against a chat that scrolls, pages and re-renders it kept ending up outside the conversation column, while a node background cannot exceed the node by construction. Each selected chat node gets its own rounded tint (`border-radius:18px`, a translucent `currentColor` fill) and a contained soft shadow.
+
 
 ## Limitations
 
@@ -259,6 +238,7 @@ node scripts/audit-session.mjs "<log path>" --fix
 
 ## Changelog
 
+- **1.4.1**: two changes. (1) The **Effects** switch and everything behind it are gone — the frosted panel, the static highlight, the entrance animations and the `data-dts-effects` root attribute were all removed, so the panel has exactly one look: host-native surfaces that follow the light and dark themes. The retired preference keys (`dts-effects`, `dts-glass`, `dts-motion`) are cleared on first run, so no unreachable styling is left applied. (2) The panel header gains a **☆ 点个Star** button that opens the repository in a new tab. It never reports "Starred": GitHub exposes no unauthenticated way to ask whether a visitor starred a repository, so a local flag would dress a guess up as state — and the one thing this button must not do is claim something the user did not do.
 - **1.4.0**: fixes two real defects. (1) The sieve scoped the wrong thing. DSH records every injected context — time hints, plugin context, the skill catalog, model switches, compaction checkpoints — as a `user/message` surface node, and the plugin only recognised `runtime-context`; every other kind counted as something the human said, so each one started a new exchange. The real prompt ended up alone in a group that closed before the reply arrived: choosing "Exchange" removed only the prompt and left the reply behind, and "Prompt" could not select it either. A `source.kind` allow-list now covers all eight injected kinds; measured on one session the grouping went from 181 groups back to 57, with the prompt and its reply in the same exchange again. (2) The preview never covered the region. It tinted each row on its own, but a DSH row is a transparent band, the bubble inside it is opaque, and rows are separated by gaps — and the collapsed process group's root carries only `data-chat-group-key`, never `data-chat-node-key`, so that block was never tinted at all. The preview is now one region painted inside the transcript scroll container: contiguous rows merge into a rounded box, a covered process group is covered whole, and because the boxes live in the transcript's own coordinates the region travels with its rows instead of drifting upward on a wheel turn. Regression tests cover both "injected context never splits an exchange" and the no-drift geometry; 27 host tests + 13 docs tests + the client assembly all pass.
 - **1.3.2**: adapted to and verified against DeepSeek Harness `0.2.2-rc.5`. Comparing rc.3 with rc.5 package by package showed that every host seam this plugin uses is unchanged, so this release carries no code change: the 25 `data-chat-*` / `data-turn-*` DOM attributes and the assistant action row of `dsh-client-ui-chat`, the node key formula `conversationContextKey` of `dsh-client-ui-conversation` (still `${kind.length}:${kind}${id}`) and its 32 slot ids, all 31 files of `dsh-session`, `dsh-token-meter`, the `ctx.webServer.register` route contract of `dsh-host-webserver` (only its `package.json` differs), and the `requireStep` validation plus the `system/message` turn/step check of `dsh-session-persistence-jsonl` are all byte-identical. The one behaviour change in rc.4 — web search now picks its provider per model route inside `dsh-web` — does not touch this plugin, and the only addition to the persistence worker's error codes between rc.3 and rc.5 is `CONTENT_REFUSED` (a DeepSeek refusal), which this plugin never classifies: a refused turn still renders as a host notice card and can still be sieved. Runtime behaviour is identical to 1.3.1.
 - **1.3.1**: fixes a string the plugin marketplace misreads. The client build stamp was written as four dot-separated numbers, `1.3.1.0` (exposed on `document.documentElement.dataset.dtsBuild` so a stale bundle is a one-line check), and the market's trust scanner read it as an IPv4 literal — which put a "uses literal IP 1.3.1.0 for network access" red line on this plugin's listing. It is now `1.3.1+b0`: same diagnostic, runtime behaviour identical to 1.3.0.
@@ -305,6 +285,12 @@ Install locally:
 # Run inside DSH, or use "Install local bundle" in the GUI
 dsh plugin add /absolute/path/to/dsh-turn-sieve
 ```
+
+## About the author and feedback
+
+The author is still a student and has little time to spend on visual polish, so the plugin inevitably carries rough edges and bugs. Reports about anything unreasonable in the plugin are welcome, and so is anyone who would like to collaborate — email is the way to reach me, and I reply to every message I see. Thank you for the support.
+
+Email: **microguyou@outlook.com**
 
 ## License
 

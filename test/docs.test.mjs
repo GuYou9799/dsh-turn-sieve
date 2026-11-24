@@ -75,7 +75,7 @@ test('the English readme mirrors the Chinese one', () => {
   assert.ok(en.startsWith('# dsh-turn-sieve'), 'English readme keeps the package title');
   assert.ok(en.includes('[中文 README](README.md)'), 'English readme links back to Chinese');
   assert.ok(zh.includes('[English README](README.en.md)'), 'Chinese readme links to English');
-  for (const heading of ['## Installation', '## Usage', '## The two modes', '## Undo', '## Safety boundaries', '## How it works', '## Agent tool', '## Appearance and effects', '## Limitations', '## Changelog', '## Development', '## License']) {
+  for (const heading of ['## Installation', '## Usage', '## The two modes', '## Undo', '## Safety boundaries', '## How it works', '## Agent tool', '## Appearance and effects', '## Limitations', '## Changelog', '## Development', '## About the author and feedback', '## License']) {
     assert.ok(en.includes(heading), `English readme has ${heading}`);
   }
   assert.ok(en.length > 8000, 'English readme is a real translation, not a stub');
@@ -128,19 +128,43 @@ test('both readmes document the verified host floor and the 0.7.3 changelog', ()
   }
 });
 
-test('both readmes describe the effects switch instead of liquid glass', () => {
+test('both readmes describe a host-native panel with no effects switch', () => {
   const heads = { 'README.md': '## 外观与特效', 'README.en.md': '## Appearance and effects' };
   for (const [file, head] of Object.entries(heads)) {
     const text = read(file);
-    assert.ok(/\*\*0\.7\.4\*\*/.test(text), `${file}: has a 0.7.4 changelog entry`);
-    assert.ok(!/dts-glass|dts-motion/.test(text), `${file}: drops the removed preference keys`);
+    assert.ok(/\*\*0\.7\.4\*\*/.test(text), `${file}: keeps the 0.7.4 changelog entry`);
     const start = text.indexOf(head);
-    assert.ok(start >= 0, `${file}: renames the appearance section`);
+    assert.ok(start >= 0, `${file}: has the appearance section`);
     const section = text.slice(start, text.indexOf('\n## ', start + head.length));
-    assert.ok(section.includes('dts-effects'), `${file}: names the effects preference key`);
-    assert.ok(!/blur\(46px\)|blur\(52px\)|blur\(10px\)/.test(section), `${file}: no stale blur radius`);
-    assert.ok(!/液态玻璃|liquid glass|liquid-glass/i.test(section), `${file}: the appearance section stops promising liquid glass`);
-    assert.ok(/默认关闭|off by default/i.test(section), `${file}: documents that effects are off by default`);
+    // The switch is gone: naming its key would send readers hunting for a control
+    // that no longer exists. The section may still talk about effects, but only to
+    // say they are paused — never as something the reader can turn on.
+    assert.ok(!section.includes('dts-effects'), `${file}: does not name the retired effects key`);
+    // "switching views" is fine; a switch the reader could flip is not.
+    assert.ok(!/「特效」开关|Effects switch/.test(section), `${file}: does not promise an effects switch`);
+    assert.ok(/暂时关闭|paused for now/.test(section), `${file}: says the effects work is paused`);
+    assert.ok(/邮箱|email/i.test(section), `${file}: invites ideas by email`);
+    // Describing the token is fine; offering a blur is not, since nothing can turn
+    // one on and the "no backdrop blur" promise would contradict the section.
+    assert.ok(!/blur\(\d+px\)/.test(section), `${file}: no blur radius left to describe`);
+    assert.ok(!/液态玻璃|liquid glass|liquid-glass/i.test(section), `${file}: the section stops promising liquid glass`);
+    assert.ok(/content-visibility/.test(section), `${file}: keeps the long-list note`);
+  }
+});
+
+test('both readmes end with the same author note and contact address', () => {
+  const heads = { 'README.md': '## 关于作者与反馈', 'README.en.md': '## About the author and feedback' };
+  for (const [file, head] of Object.entries(heads)) {
+    const text = read(file);
+    const start = text.indexOf(head);
+    assert.ok(start >= 0, `${file}: has the author/feedback section`);
+    const section = text.slice(start);
+    assert.ok(section.includes('microguyou@outlook.com'), `${file}: publishes the contact address`);
+    assert.ok(/学生|student/i.test(section), `${file}: says who is maintaining it`);
+    assert.ok(/bug/i.test(section), `${file}: invites bug reports`);
+    // The note belongs at the end: it must come after the changelog, not float mid-document.
+    assert.ok(start > text.indexOf(file === 'README.md' ? '## 更新记录' : '## Changelog'), `${file}: the note sits after the changelog`);
+    assert.ok(start < text.indexOf('## License'), `${file}: the note sits before the license`);
   }
 });
 
